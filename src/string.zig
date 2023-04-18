@@ -3,6 +3,7 @@ const t = @import("t.zig");
 
 const v = @import("validate.zig");
 const codes = @import("codes.zig");
+const Builder = @import("builder.zig").Builder;
 const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
 
@@ -14,7 +15,7 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be a string",
 };
 
-pub fn StringConfig(comptime S: type) type {
+pub fn Config(comptime S: type) type {
 	return struct {
 		min: ?usize = null,
 		max: ?usize = null,
@@ -34,19 +35,12 @@ pub fn String(comptime S: type) type {
 
 		const Self = @This();
 
-		pub fn deinit(self: Self, allocator: Allocator) void {
-			if (self.min_invalid) |i| {
-				allocator.free(i.err);
-			}
-
-			if (self.max_invalid) |i| {
-				allocator.free(i.err);
-			}
-		}
-
 		pub fn validator(self: *const Self) Validator(S) {
 			return Validator(S).init(self);
 		}
+
+		// part of the Validator interface, but noop for strings
+		pub fn nestField(_: *const Self, _: Allocator, _: []const u8) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = input orelse {
@@ -90,7 +84,7 @@ pub fn String(comptime S: type) type {
 	};
 }
 
-pub fn string(comptime S: type, allocator: Allocator, config: StringConfig(S)) !String(S) {
+pub fn string(comptime S: type, allocator: Allocator, config: Config(S)) !String(S) {
 	var min_invalid: ?v.Invalid = null;
 	if (config.min) |m| {
 		min_invalid = v.Invalid{
@@ -124,15 +118,18 @@ test "string: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
 	defer context.deinit(t.allocator);
 
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
 	{
-		const validator = try string(void, t.allocator, .{.required = true});
+		const validator = try builder.string(.{.required = true});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		context.reset();
-		const validator = try string(void, t.allocator, .{.required = false});
+		const validator = try builder.string(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -142,7 +139,10 @@ test "string: type" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const validator = try string(void, t.allocator, .{});
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = try builder.string(.{});
 	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 33}, &context));
 	try t.expectInvalid(.{.code = codes.STRING_TYPE}, context);
 }
@@ -151,9 +151,10 @@ test "string: min length" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const validator = try string(void, t.allocator, .{.min = 4});
-	defer validator.deinit(t.allocator);
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
 
+	const validator = try builder.string(.{.min = 4});
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abc"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 4}, context);
@@ -177,8 +178,10 @@ test "string: max length" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const validator = try string(void, t.allocator, .{.max = 4});
-	defer validator.deinit(t.allocator);
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = try builder.string(.{.max = 4});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abcde"}, &context));
@@ -202,8 +205,10 @@ test "string: function" {
 	var context = try Context(i64).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, 101);
 	defer context.deinit(t.allocator);
 
-	const validator = try string(i64, t.allocator, .{.function = testStringValidator});
-	defer validator.deinit(t.allocator);
+	const builder = try Builder(i64).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = try builder.string(.{.function = testStringValidator});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "ok"}, &context));

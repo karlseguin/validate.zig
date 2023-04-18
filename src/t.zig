@@ -54,13 +54,3 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 	}
 	return error.MissingExpectedInvalid;
 }
-
-// pub fn validate(data: []const u8, validator: anytype, context: *Context(void)) ?std.json.Value {
-// 	var parser = std.json.Parser.init(allocator, false);
-// 	defer parser.deinit();
-
-// 	var tree = parser.parse(data) catch unreachable;
-// 	defer tree.deinit();
-
-// 	return validator.validator().validateJson(tree.root, context) catch unreachable;
-// }

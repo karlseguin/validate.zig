@@ -6,8 +6,11 @@ const t = @import("t.zig");
 const v = @import("validate.zig");
 const codes = @import("codes.zig");
 const Typed = @import("typed.zig").Typed;
+const Builder = @import("builder.zig").Builder;
 const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
+
+const Allocator = std.mem.Allocator;
 
 const INVALID_TYPE = v.Invalid{
 	.code = codes.OBJECT_TYPE,
@@ -17,26 +20,34 @@ const INVALID_TYPE = v.Invalid{
 pub fn Field(comptime S: type) type {
 	return struct {
 		name: []const u8,
+		path: []const u8,
 		validator: Validator(S),
 	};
 }
 
-pub fn ObjectConfig(comptime S: type) type {
+pub fn Config(comptime _: type) type {
 	return struct {
 		required: bool = false,
-		fields: ?[]const Field(S) = null,
 	};
 }
 
 pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
-		fields: ?[]const Field(S),
+		fields: []const Field(S),
 
 		const Self = @This();
 
 		pub fn validator(self: *const Self) Validator(S) {
 			return Validator(S).init(self);
+		}
+
+		// part of the Validator interface, but noop for strings
+		pub fn nestField(self: *const Self, allocator: Allocator, parent: []const u8) !void {
+			var fields = @constCast(self.fields);
+			for (fields) |*field| {
+				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent, field.path});
+			}
 		}
 
 		pub fn validateJson(self: Self, data: []const u8, context: *Context(S)) !?Typed {
@@ -66,22 +77,19 @@ pub fn Object(comptime S: type) type {
 				},
 			};
 
-			if (self.fields) |fields| {
-				context.startObject();
-				for (fields) |f| {
-					const name = f.name;
-					context.setField(name);
-					if (value.getEntry(name)) |entry| {
-						if (try f.validator.validateJsonValue(entry.value_ptr.*, context)) |new_field_value| {
-							entry.value_ptr.* = new_field_value;
-						}
-					} else {
-						if (try f.validator.validateJsonValue(null, context)) |new_field_value| {
-							try value.put(name, new_field_value);
-						}
+			const fields = self.fields;
+			for (fields) |f| {
+				context.field = f;
+				const name = f.name;
+				if (value.getEntry(name)) |entry| {
+					if (try f.validator.validateJsonValue(entry.value_ptr.*, context)) |new_field_value| {
+						entry.value_ptr.* = new_field_value;
+					}
+				} else {
+					if (try f.validator.validateJsonValue(null, context)) |new_field_value| {
+						try value.put(name, new_field_value);
 					}
 				}
-				context.endObject();
 			}
 
 			return optional_value;
@@ -89,9 +97,13 @@ pub fn Object(comptime S: type) type {
 	};
 }
 
-pub fn object(comptime S: type, config: ObjectConfig(S)) Object(S) {
+pub fn object(comptime S: type, allocator: Allocator, fields: []const Field(S), config: Config(S)) !Object(S) {
+	for (fields) |field| {
+		try field.validator.nestField(allocator, field.name);
+	}
+
 	return .{
-		.fields = config.fields,
+		.fields = fields,
 		.required = config.required,
 	};
 }
@@ -101,14 +113,19 @@ test "object: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
 	defer context.deinit(t.allocator);
 
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
 	{
-		try t.expectEqual(nullJson, try object(void, .{.required = true}).validateJsonValue(null, &context));
+		const validator = try builder.object(&.{}, .{.required = true});
+		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		context.reset();
-		try t.expectEqual(nullJson, try object(void, .{.required = false}).validateJsonValue(null, &context));
+		const validator = try builder.object(&.{}, .{.required = false});
+		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -117,7 +134,11 @@ test "object: type" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
 	defer context.deinit(t.allocator);
 
-	try t.expectEqual(nullJson, try object(void, .{}).validateJsonValue(.{.String = "Hi"}, &context));
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = try builder.object(&.{}, .{});
+	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "Hi"}, &context));
 	try t.expectInvalid(.{.code = codes.OBJECT_TYPE}, context);
 }
 
@@ -125,12 +146,13 @@ test "object: field" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const nameValidator = try v.string(void, t.allocator, .{.required = true, .min = 3});
-	defer nameValidator.deinit(t.allocator);
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
 
-	const objectValidator = object(void, .{.fields = &[_]v.Field(void){
-		v.field(void, "name", nameValidator.validator()),
-	}});
+	const nameValidator = try builder.string(.{.required = true, .min = 3});
+	const objectValidator = try builder.object(&.{
+		builder.field("name", &nameValidator),
+	}, .{});
 
 	_ = try objectValidator.validateJson("{}", &context);
 
@@ -141,19 +163,12 @@ test "object: nested" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const nameValidator = try v.string(void, t.allocator, .{.required = true, .min = 3});
-	defer nameValidator.deinit(t.allocator);
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
 
-	const userValidator = object(void, .{
-		.required = true,
-		.fields = &[_]v.Field(void){
-			v.field(void, "name", nameValidator.validator()),
-		}
-	});
-
-	const dataValidator = object(void, .{.fields = &[_]v.Field(void){
-		v.field(void, "user", userValidator.validator()),
-	}});
+	const nameValidator = try builder.string(.{.required = true, .min = 3});
+	const userValidator = try builder.object(&.{builder.field("name", &nameValidator),}, .{.required = true});
+	const dataValidator = try builder.object(&.{builder.field("user", &userValidator),}, .{});
 
 	{
 		_ = try dataValidator.validateJson("{}", &context);
@@ -177,12 +192,13 @@ test "object: change value" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const nameValidator = try v.string(void, t.allocator, .{.function = testChangeValue});
-	defer nameValidator.deinit(t.allocator);
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
 
-	const objectValidator = object(void, .{.fields = &[_]v.Field(void){
-		v.field(void, "name", nameValidator.validator()),
-	}});
+	const nameValidator = try builder.string(.{.function = testChangeValue});
+	const objectValidator = try builder.object(&.{
+		builder.field("name", &nameValidator),
+	}, .{});
 
 	{
 		const typed = try objectValidator.validateJson("{\"name\": \"normal\"}", &context) orelse unreachable;
