@@ -5,6 +5,7 @@ pub const TYPE_INT = 4;
 pub const TYPE_FLOAT = 5;
 pub const STRING_LEN_MIN = 100;
 pub const STRING_LEN_MAX = 101;
+pub const STRING_CHOICE = 102;
 pub const INT_MIN = 120;
 pub const INT_MAX = 121;
 pub const FLOAT_MIN = 130;

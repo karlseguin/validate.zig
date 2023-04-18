@@ -190,11 +190,6 @@ test "object: nested" {
 	{
 		context.reset();
 		_ = try dataValidator.validateJson("{\"user\": {}}", &context);
-		var arr = std.ArrayList(u8).init(t.allocator);
-		defer arr.deinit();
-		try std.json.stringify(context.errors(), .{}, arr.writer());
-		std.debug.print("{s}\n", .{arr.items});
-
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.name"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.score"}, context);

@@ -20,6 +20,7 @@ pub fn Config(comptime S: type) type {
 		min: ?usize = null,
 		max: ?usize = null,
 		required: bool = false,
+		choices: ?[][]const u8 = null,
 		function: ?*const fn(value: []const u8, context: *Context(S)) anyerror!?[]const u8 = null,
 	};
 }
@@ -29,9 +30,11 @@ pub fn String(comptime S: type) type {
 		required: bool,
 		min: ?usize,
 		max: ?usize,
-		min_invalid: ?v.Invalid,
-		max_invalid: ?v.Invalid,
+		choices: ?[][]const u8 = null,
 		function: ?*const fn(value: []const u8, context: *Context(S)) anyerror!?[]const u8,
+		invalid_min: ?v.Invalid,
+		invalid_max: ?v.Invalid,
+		invalid_choices: ?v.Invalid,
 
 		const Self = @This();
 
@@ -59,17 +62,28 @@ pub fn String(comptime S: type) type {
 			};
 
 			if (self.min) |m| {
-				std.debug.assert(self.min_invalid != null);
+				std.debug.assert(self.invalid_min != null);
 				if (value.len < m) {
-					try context.add(self.min_invalid.?);
+					try context.add(self.invalid_min.?);
 					return null;
 				}
 			}
 
 			if (self.max) |m| {
-				std.debug.assert(self.max_invalid != null);
+				std.debug.assert(self.invalid_max != null);
 				if (value.len > m) {
-					try context.add(self.max_invalid.?);
+					try context.add(self.invalid_max.?);
+					return null;
+				}
+			}
+
+			choice_blk: {
+				if (self.choices) |choices| {
+					std.debug.assert(self.invalid_choices != null);
+					for (choices) |choice| {
+						if (std.mem.eql(u8, choice, value)) break :choice_blk;
+					}
+					try context.add(self.invalid_choices.?);
 					return null;
 				}
 			}
@@ -85,31 +99,43 @@ pub fn String(comptime S: type) type {
 }
 
 pub fn string(comptime S: type, allocator: Allocator, config: Config(S)) !String(S) {
-	var min_invalid: ?v.Invalid = null;
+	var invalid_min: ?v.Invalid = null;
 	if (config.min) |m| {
-		min_invalid = v.Invalid{
+		invalid_min = v.Invalid{
 			.code = codes.STRING_LEN_MIN,
 			.data = .{.imin = .{.min = @intCast(i64, m) }},
 			.err = try std.fmt.allocPrint(allocator, "must have at least {d} characters", .{m}),
 		};
 	}
 
-	var max_invalid: ?v.Invalid = null;
+	var invalid_max: ?v.Invalid = null;
 	if (config.max) |m| {
-		max_invalid = v.Invalid{
+		invalid_max = v.Invalid{
 			.code = codes.STRING_LEN_MAX,
 			.data = .{.imax = .{.max = @intCast(i64, m) }},
 			.err = try std.fmt.allocPrint(allocator, "must no more than {d} characters", .{m}),
 		};
 	}
 
+	var invalid_choices: ?v.Invalid = null;
+	if (config.choices) |choices| {
+		const choice_list = try std.mem.join(allocator, ", ", choices);
+		invalid_choices = v.Invalid{
+			.code = codes.STRING_CHOICE,
+			.data = .{.choice = .{.valid = choices}},
+			.err = try std.fmt.allocPrint(allocator, "must be one of: {s}", .{choice_list}),
+		};
+	}
+
 	return .{
 		.min = config.min,
 		.max = config.max,
-		.min_invalid = min_invalid,
-		.max_invalid = max_invalid,
+		.choices = config.choices,
 		.required = config.required,
 		.function = config.function,
+		.invalid_min = invalid_min,
+		.invalid_max = invalid_max,
+		.invalid_choices = invalid_choices,
 	};
 }
 
@@ -173,7 +199,6 @@ test "string: min length" {
 	}
 }
 
-
 test "string: max length" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
 	defer context.deinit(t.allocator);
@@ -197,6 +222,28 @@ test "string: max length" {
 	{
 		context.reset();
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abc"}, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+}
+
+test "string: choices" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	var choices = [_][]const u8{"one", "two", "three"};
+	const validator = try builder.string(.{.choices = &choices});
+
+	{
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "nope"}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_CHOICE}, context);
+	}
+
+	for (choices) |choice| {
+		context.reset();
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = choice}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -249,3 +296,4 @@ fn testStringValidator(value: []const u8, context: *Context(i64)) !?[]const u8 {
 
 	return null;
 }
+

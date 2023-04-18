@@ -32,6 +32,8 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 		if (e.field) |expected_field| {
 			if (invalid.field) |actual_field| {
 				if (!std.mem.eql(u8, expected_field, actual_field)) continue;
+			} else {
+				continue;
 			}
 		}
 
@@ -41,6 +43,8 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 					.imin => |d| if (d.min != expected_min) continue,
 					else => continue,
 				}
+			} else {
+				continue;
 			}
 		}
 
@@ -50,6 +54,8 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 					.imax => |d| if (d.max != expected_max) continue,
 					else => continue,
 				}
+			} else {
+				continue;
 			}
 		}
 
@@ -68,9 +74,10 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 					.fmax => |d| if (d.max != expected_max) continue,
 					else => continue,
 				}
+			} else {
+				continue;
 			}
 		}
-
 		return;
 	}
 	return error.MissingExpectedInvalid;
