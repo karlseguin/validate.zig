@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
 const Int = @import("int.zig").Int;
+const Bool = @import("bool.zig").Bool;
 const Float = @import("float.zig").Float;
 const String = @import("string.zig").String;
 const Validator = @import("validator.zig").Validator;
@@ -38,6 +39,10 @@ pub fn Builder(comptime S: type) type {
 
 		pub fn int(self: Self, config: Int(S).Config) !Int(S) {
 			return Int(S).init(self.allocator, config);
+		}
+
+		pub fn boolean(self: Self, config: Bool(S).Config) !Bool(S) {
+			return Bool(S).init(self.allocator, config);
 		}
 
 		pub fn float(self: Self, config: Float(S).Config) !Float(S) {

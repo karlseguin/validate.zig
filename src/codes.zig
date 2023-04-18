@@ -3,6 +3,7 @@ pub const TYPE_OBJECT = 2;
 pub const TYPE_STRING = 3;
 pub const TYPE_INT = 4;
 pub const TYPE_FLOAT = 5;
+pub const TYPE_BOOL = 6;
 pub const STRING_LEN_MIN = 100;
 pub const STRING_LEN_MAX = 101;
 pub const STRING_CHOICE = 102;

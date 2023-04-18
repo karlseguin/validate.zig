@@ -12,7 +12,7 @@ const Allocator = std.mem.Allocator;
 
 const INVALID_TYPE = v.Invalid{
 	.code = codes.TYPE_FLOAT,
-	.err = "must be an float",
+	.err = "must be a float",
 };
 
 pub fn Float(comptime S: type) type {
@@ -66,7 +66,7 @@ pub fn Float(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		// part of the Validator interface, but noop for ints
+		// part of the Validator interface, but noop for floats
 		pub fn nestField(_: *const Self, _: Allocator, _: []const u8) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
