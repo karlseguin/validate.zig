@@ -14,6 +14,8 @@ const InvalidExpectation = struct {
 	field: ?[]const u8 = null,
 	data_min: ?i64 = null,
 	data_max: ?i64 = null,
+	data_fmin: ?f64 = null,
+	data_fmax: ?f64 = null,
 };
 
 pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
@@ -50,6 +52,25 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 				}
 			}
 		}
+
+		if (e.data_fmin) |expected_min| {
+			if (invalid.data) |actual_data| {
+				switch (actual_data) {
+					.fmin => |d| if (d.min != expected_min) continue,
+					else => continue,
+				}
+			}
+		}
+
+		if (e.data_fmax) |expected_max| {
+			if (invalid.data) |actual_data| {
+				switch (actual_data) {
+					.fmax => |d| if (d.max != expected_max) continue,
+					else => continue,
+				}
+			}
+		}
+
 		return;
 	}
 	return error.MissingExpectedInvalid;

@@ -160,17 +160,19 @@ test "object: field" {
 }
 
 test "object: nested" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 5, .max_depth = 2}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const ageValidator = try builder.int(.{.required = true});
-	const nameValidator = try builder.string(.{.required = true, .min = 3});
+	const nameValidator = try builder.string(.{.required = true});
+	const scoreValidator = try builder.float(.{.required = true});
 	const userValidator = try builder.object(&.{
 		builder.field("age", &ageValidator),
 		builder.field("name", &nameValidator),
+		builder.field("score", &scoreValidator),
 	}, .{.required = true});
 	const dataValidator = try builder.object(&.{builder.field("user", &userValidator)}, .{});
 
@@ -188,8 +190,14 @@ test "object: nested" {
 	{
 		context.reset();
 		_ = try dataValidator.validateJson("{\"user\": {}}", &context);
+		var arr = std.ArrayList(u8).init(t.allocator);
+		defer arr.deinit();
+		try std.json.stringify(context.errors(), .{}, arr.writer());
+		std.debug.print("{s}\n", .{arr.items});
+
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.name"}, context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.score"}, context);
 	}
 }
 

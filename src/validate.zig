@@ -11,11 +11,15 @@ pub const Invalid = struct {
 pub const InvalidDataType = enum {
 	imin,
 	imax,
+	fmin,
+	fmax,
 };
 
 pub const InvalidData = union(InvalidDataType) {
 	imin: MinInt,
 	imax: MaxInt,
+	fmin: MinFloat,
+	fmax: MaxFloat,
 
 	pub const MinInt = struct {
 		min: i64
@@ -23,6 +27,14 @@ pub const InvalidData = union(InvalidDataType) {
 
 	pub const MaxInt = struct {
 		max: i64
+	};
+
+	pub const MinFloat = struct {
+		min: f64
+	};
+
+	pub const MaxFloat = struct {
+		max: f64
 	};
 };
 

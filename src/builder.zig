@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
 const i = @import("int.zig");
+const f = @import("float.zig");
 const s = @import("string.zig");
 const o = @import("object.zig");
 const Validator = @import("validator.zig").Validator;
@@ -35,6 +36,10 @@ pub fn Builder(comptime S: type) type {
 
 		pub fn int(self: Self, config: i.Config(S)) !i.Int(S) {
 			return i.int(S, self.allocator, config);
+		}
+
+		pub fn float(self: Self, config: f.Config(S)) !f.Float(S) {
+			return f.float(S, self.allocator, config);
 		}
 
 		pub fn string(self: Self, config: s.Config(S)) !s.String(S) {
