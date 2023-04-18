@@ -13,7 +13,7 @@ const Validator = @import("validator.zig").Validator;
 const Allocator = std.mem.Allocator;
 
 const INVALID_TYPE = v.Invalid{
-	.code = codes.OBJECT_TYPE,
+	.code = codes.TYPE_OBJECT,
 	.err = "must be an object",
 };
 
@@ -139,7 +139,7 @@ test "object: type" {
 
 	const validator = try builder.object(&.{}, .{});
 	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "Hi"}, &context));
-	try t.expectInvalid(.{.code = codes.OBJECT_TYPE}, context);
+	try t.expectInvalid(.{.code = codes.TYPE_OBJECT}, context);
 }
 
 test "object: field" {
@@ -166,9 +166,13 @@ test "object: nested" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
+	const ageValidator = try builder.int(.{.required = true});
 	const nameValidator = try builder.string(.{.required = true, .min = 3});
-	const userValidator = try builder.object(&.{builder.field("name", &nameValidator),}, .{.required = true});
-	const dataValidator = try builder.object(&.{builder.field("user", &userValidator),}, .{});
+	const userValidator = try builder.object(&.{
+		builder.field("age", &ageValidator),
+		builder.field("name", &nameValidator),
+	}, .{.required = true});
+	const dataValidator = try builder.object(&.{builder.field("user", &userValidator)}, .{});
 
 	{
 		_ = try dataValidator.validateJson("{}", &context);
@@ -178,12 +182,13 @@ test "object: nested" {
 	{
 		context.reset();
 		_ = try dataValidator.validateJson("{\"user\": 3}", &context);
-		try t.expectInvalid(.{.code = codes.OBJECT_TYPE, .field = "user"}, context);
+		try t.expectInvalid(.{.code = codes.TYPE_OBJECT, .field = "user"}, context);
 	}
 
 	{
 		context.reset();
 		_ = try dataValidator.validateJson("{\"user\": {}}", &context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.name"}, context);
 	}
 }
