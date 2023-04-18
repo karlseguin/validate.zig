@@ -15,16 +15,6 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be a string",
 };
 
-pub fn Config(comptime S: type) type {
-	return struct {
-		min: ?usize = null,
-		max: ?usize = null,
-		required: bool = false,
-		choices: ?[][]const u8 = null,
-		function: ?*const fn(value: []const u8, context: *Context(S)) anyerror!?[]const u8 = null,
-	};
-}
-
 pub fn String(comptime S: type) type {
 	return struct {
 		required: bool,
@@ -37,6 +27,55 @@ pub fn String(comptime S: type) type {
 		invalid_choices: ?v.Invalid,
 
 		const Self = @This();
+
+		pub const Config = struct {
+			min: ?usize = null,
+			max: ?usize = null,
+			required: bool = false,
+			choices: ?[][]const u8 = null,
+			function: ?*const fn(value: []const u8, context: *Context(S)) anyerror!?[]const u8 = null,
+		};
+
+		pub fn init(allocator: Allocator, config: Config) !Self {
+			var invalid_min: ?v.Invalid = null;
+			if (config.min) |m| {
+				invalid_min = v.Invalid{
+					.code = codes.STRING_LEN_MIN,
+					.data = .{.imin = .{.min = @intCast(i64, m) }},
+					.err = try std.fmt.allocPrint(allocator, "must have at least {d} characters", .{m}),
+				};
+			}
+
+			var invalid_max: ?v.Invalid = null;
+			if (config.max) |m| {
+				invalid_max = v.Invalid{
+					.code = codes.STRING_LEN_MAX,
+					.data = .{.imax = .{.max = @intCast(i64, m) }},
+					.err = try std.fmt.allocPrint(allocator, "must no more than {d} characters", .{m}),
+				};
+			}
+
+			var invalid_choices: ?v.Invalid = null;
+			if (config.choices) |choices| {
+				const choice_list = try std.mem.join(allocator, ", ", choices);
+				invalid_choices = v.Invalid{
+					.code = codes.STRING_CHOICE,
+					.data = .{.choice = .{.valid = choices}},
+					.err = try std.fmt.allocPrint(allocator, "must be one of: {s}", .{choice_list}),
+				};
+			}
+
+			return .{
+				.min = config.min,
+				.max = config.max,
+				.choices = config.choices,
+				.required = config.required,
+				.function = config.function,
+				.invalid_min = invalid_min,
+				.invalid_max = invalid_max,
+				.invalid_choices = invalid_choices,
+			};
+		}
 
 		pub fn validator(self: *const Self) Validator(S) {
 			return Validator(S).init(self);
@@ -95,47 +134,6 @@ pub fn String(comptime S: type) type {
 
 			return null;
 		}
-	};
-}
-
-pub fn string(comptime S: type, allocator: Allocator, config: Config(S)) !String(S) {
-	var invalid_min: ?v.Invalid = null;
-	if (config.min) |m| {
-		invalid_min = v.Invalid{
-			.code = codes.STRING_LEN_MIN,
-			.data = .{.imin = .{.min = @intCast(i64, m) }},
-			.err = try std.fmt.allocPrint(allocator, "must have at least {d} characters", .{m}),
-		};
-	}
-
-	var invalid_max: ?v.Invalid = null;
-	if (config.max) |m| {
-		invalid_max = v.Invalid{
-			.code = codes.STRING_LEN_MAX,
-			.data = .{.imax = .{.max = @intCast(i64, m) }},
-			.err = try std.fmt.allocPrint(allocator, "must no more than {d} characters", .{m}),
-		};
-	}
-
-	var invalid_choices: ?v.Invalid = null;
-	if (config.choices) |choices| {
-		const choice_list = try std.mem.join(allocator, ", ", choices);
-		invalid_choices = v.Invalid{
-			.code = codes.STRING_CHOICE,
-			.data = .{.choice = .{.valid = choices}},
-			.err = try std.fmt.allocPrint(allocator, "must be one of: {s}", .{choice_list}),
-		};
-	}
-
-	return .{
-		.min = config.min,
-		.max = config.max,
-		.choices = config.choices,
-		.required = config.required,
-		.function = config.function,
-		.invalid_min = invalid_min,
-		.invalid_max = invalid_max,
-		.invalid_choices = invalid_choices,
 	};
 }
 

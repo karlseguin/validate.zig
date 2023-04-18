@@ -15,15 +15,6 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be an int",
 };
 
-pub fn Config(comptime S: type) type {
-	return struct {
-		min: ?i64 = null,
-		max: ?i64 = null,
-		required: bool = false,
-		function: ?*const fn(value: i64, context: *Context(S)) anyerror!?i64 = null,
-	};
-}
-
 pub fn Int(comptime S: type) type {
 	return struct {
 		required: bool,
@@ -34,6 +25,42 @@ pub fn Int(comptime S: type) type {
 		function: ?*const fn(value: i64, context: *Context(S)) anyerror!?i64,
 
 		const Self = @This();
+
+		pub const Config = struct {
+			min: ?i64 = null,
+			max: ?i64 = null,
+			required: bool = false,
+			function: ?*const fn(value: i64, context: *Context(S)) anyerror!?i64 = null,
+		};
+
+		pub fn init(allocator: Allocator, config: Config) !Self {
+			var min_invalid: ?v.Invalid = null;
+			if (config.min) |m| {
+				min_invalid = v.Invalid{
+					.code = codes.INT_MIN,
+					.data = .{.imin = .{.min = m }},
+					.err = try std.fmt.allocPrint(allocator, "cannot be less than {d}", .{m}),
+				};
+			}
+
+			var max_invalid: ?v.Invalid = null;
+			if (config.max) |m| {
+				max_invalid = v.Invalid{
+					.code = codes.INT_MAX,
+					.data = .{.imax = .{.max = m }},
+					.err = try std.fmt.allocPrint(allocator, "cannot be greater than {d}", .{m}),
+				};
+			}
+
+			return .{
+				.min = config.min,
+				.max = config.max,
+				.min_invalid = min_invalid,
+				.max_invalid = max_invalid,
+				.required = config.required,
+				.function = config.function,
+			};
+		}
 
 		pub fn validator(self: *const Self) Validator(S) {
 			return Validator(S).init(self);
@@ -81,35 +108,6 @@ pub fn Int(comptime S: type) type {
 
 			return null;
 		}
-	};
-}
-
-pub fn int(comptime S: type, allocator: Allocator, config: Config(S)) !Int(S) {
-	var min_invalid: ?v.Invalid = null;
-	if (config.min) |m| {
-		min_invalid = v.Invalid{
-			.code = codes.INT_MIN,
-			.data = .{.imin = .{.min = m }},
-			.err = try std.fmt.allocPrint(allocator, "cannot be less than {d}", .{m}),
-		};
-	}
-
-	var max_invalid: ?v.Invalid = null;
-	if (config.max) |m| {
-		max_invalid = v.Invalid{
-			.code = codes.INT_MAX,
-			.data = .{.imax = .{.max = m }},
-			.err = try std.fmt.allocPrint(allocator, "cannot be greater than {d}", .{m}),
-		};
-	}
-
-	return .{
-		.min = config.min,
-		.max = config.max,
-		.min_invalid = min_invalid,
-		.max_invalid = max_invalid,
-		.required = config.required,
-		.function = config.function,
 	};
 }
 

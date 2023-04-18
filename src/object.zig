@@ -25,18 +25,27 @@ pub fn Field(comptime S: type) type {
 	};
 }
 
-pub fn Config(comptime _: type) type {
-	return struct {
-		required: bool = false,
-	};
-}
-
 pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
 		fields: []const Field(S),
 
 		const Self = @This();
+
+		pub const Config = struct {
+			required: bool = false,
+		};
+
+		pub fn init(allocator: Allocator, fields: []const Field(S), config: Config) !Self {
+			for (fields) |field| {
+				try field.validator.nestField(allocator, field.name);
+			}
+
+			return .{
+				.fields = fields,
+				.required = config.required,
+			};
+		}
 
 		pub fn validator(self: *const Self) Validator(S) {
 			return Validator(S).init(self);
@@ -94,17 +103,6 @@ pub fn Object(comptime S: type) type {
 
 			return optional_value;
 		}
-	};
-}
-
-pub fn object(comptime S: type, allocator: Allocator, fields: []const Field(S), config: Config(S)) !Object(S) {
-	for (fields) |field| {
-		try field.validator.nestField(allocator, field.name);
-	}
-
-	return .{
-		.fields = fields,
-		.required = config.required,
 	};
 }
 

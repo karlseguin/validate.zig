@@ -1,13 +1,15 @@
 const std = @import("std");
+const object = @import("object.zig");
 
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
-const i = @import("int.zig");
-const f = @import("float.zig");
-const s = @import("string.zig");
-const o = @import("object.zig");
+const Int = @import("int.zig").Int;
+const Float = @import("float.zig").Float;
+const String = @import("string.zig").String;
 const Validator = @import("validator.zig").Validator;
+const Field = object.Field;
+const Object = object.Object;
 
 pub fn Builder(comptime S: type) type {
 	return struct {
@@ -34,23 +36,23 @@ pub fn Builder(comptime S: type) type {
 			allocator.destroy(self.arena);
 		}
 
-		pub fn int(self: Self, config: i.Config(S)) !i.Int(S) {
-			return i.int(S, self.allocator, config);
+		pub fn int(self: Self, config: Int(S).Config) !Int(S) {
+			return Int(S).init(self.allocator, config);
 		}
 
-		pub fn float(self: Self, config: f.Config(S)) !f.Float(S) {
-			return f.float(S, self.allocator, config);
+		pub fn float(self: Self, config: Float(S).Config) !Float(S) {
+			return Float(S).init(self.allocator, config);
 		}
 
-		pub fn string(self: Self, config: s.Config(S)) !s.String(S) {
-			return s.string(S, self.allocator, config);
+		pub fn string(self: Self, config: String(S).Config) !String(S) {
+			return String(S).init(self.allocator, config);
 		}
 
-		pub fn object(self: Self, fields: []const o.Field(S), config: o.Config(S)) !o.Object(S) {
-			return o.object(S, self.allocator, fields, config);
+		pub fn object(self: Self, fields: []const Field(S), config: Object(S).Config) !Object(S) {
+			return Object(S).init(self.allocator, fields, config);
 		}
 
-		pub fn field(_: Self, name: []const u8, validator: anytype) o.Field(S) {
+		pub fn field(_: Self, name: []const u8, validator: anytype) Field(S) {
 			return .{
 				.name = name,
 				.path = name,
