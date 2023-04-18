@@ -7,7 +7,7 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 const InvalidField = struct {
 	code: i64,
 	field: ?[]const u8,
-	@"error": []const u8,
+	err: []const u8,
 	data: ?v.InvalidData,
 };
 
@@ -84,8 +84,8 @@ pub fn Context(comptime S: type) type {
 			_errors[len] = InvalidField{
 				.code = invalid.code,
 				.field = field,
+				.err = invalid.err,
 				.data = invalid.data,
-				.@"error" = invalid.@"error",
 			};
 			self._error_len = len + 1;
 		}
