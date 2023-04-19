@@ -128,7 +128,9 @@ pub fn Array(comptime S: type) type {
 				defer context.endArray();
 				for (items, 0..) |item, i| {
 					context.arrayIndex(i);
-					_ = try val.validateJsonValue(item, context);
+					if (try val.validateJsonValue(item, context)) |new_value| {
+						items[i] = new_value;
+					}
 				}
 			}
 
@@ -231,7 +233,7 @@ test "array: max length" {
 	}
 }
 
-test "array: nested field name" {
+test "array: nested" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
@@ -269,4 +271,32 @@ test "array: deeplys nested field name" {
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.1"}, context);
 	}
+}
+
+test "array: change value" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const itemValidator = try builder.int(.{.function = testArrayChangeValue});
+	const arrayValidator = try builder.array(&itemValidator, .{});
+	const objectValidator = try builder.object(&.{
+		builder.field("items", &arrayValidator),
+	}, .{});
+
+	{
+		const typed = (try objectValidator.validateJson("{\"items\": [1, 2, -5]}", &context)).?;
+		try t.expectEqual(true, context.isValid());
+		const items = typed.array("items").?.items;
+		try t.expectEqual(@as(i64, -1), items[0].Integer);
+		try t.expectEqual(@as(i64, 2), items[1].Integer);
+		try t.expectEqual(@as(i64, -5), items[2].Integer);
+	}
+}
+
+fn testArrayChangeValue(value: ?i64, _: *Context(void)) !?i64 {
+	if (value.? == 1) return -1;
+	return null;
 }

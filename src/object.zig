@@ -230,7 +230,7 @@ test "object: change value" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const nameValidator = try builder.string(.{.function = testChangeValue});
+	const nameValidator = try builder.string(.{.function = testObjectChangeValue});
 	const objectValidator = try builder.object(&.{
 		builder.field("name", &nameValidator),
 	}, .{});
@@ -248,7 +248,7 @@ test "object: change value" {
 	}
 }
 
-fn testChangeValue(value: ?[]const u8, _: *Context(void)) !?[]const u8 {
+fn testObjectChangeValue(value: ?[]const u8, _: *Context(void)) !?[]const u8 {
 	if (value.?[0] == '!') {
 		return "abc";
 	}
