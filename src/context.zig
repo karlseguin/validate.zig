@@ -80,10 +80,10 @@ pub fn Context(comptime S: type) type {
 
 			var field_path: ?[]const u8 = null;
 			if (self.field) |f| {
-				field_path = f.path;
-
 				if (self._nesting_idx) |ni| {
-					field_path = try createArrayPath(self.allocator, field_path.?, self._nesting[0..(ni+1)]);
+					field_path = try createArrayPath(self.allocator, f.parts.?, self._nesting[0..(ni+1)]);
+				} else {
+					field_path = f.path;
 				}
 			}
 
@@ -119,25 +119,46 @@ pub fn Context(comptime S: type) type {
 	};
 }
 
-// TODO: improve this, a lot, this was just done quick and easy to get the functionality right
-fn createArrayPath(allocator: Allocator, cfmt: []const u8, indexes: []usize) ![]const u8{
-	var indexes_len: usize = 0;
+fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) ![]const u8{
+	var target_len: usize = 0;
 	for (indexes) |idx| {
-		indexes_len += intLength(idx);
+		target_len += intLength(idx);
+	}
+	for (parts) |p| {
+		target_len += p.len + 1;
 	}
 
-	var fmt = cfmt;
-	var n: usize = 0;
-	var buf = try allocator.alloc(u8, fmt.len + indexes_len);
-	for (indexes) |idx| {
-		const sep = std.mem.indexOfScalar(u8, fmt, 36) orelse unreachable;
-		std.mem.copy(u8, buf[n..], fmt[0..sep]);
-		n += sep;
-		n += std.fmt.formatIntBuf(buf[n..], idx, 10, .lower, .{});
-		fmt = fmt[(sep+1)..]; // +1 to skip the 36 field separator
+	var buf = try allocator.alloc(u8, target_len - 1);
+
+	// what index we're at in indexes
+	var index: usize = 0;
+
+	// where we are in buf
+	var pos: usize = 0;
+
+	// so we can safely prepend the .
+	const first = parts[0];
+	if (first.len == 0) {
+			pos += std.fmt.formatIntBuf(buf, indexes[index], 10, .lower, .{});
+			index += 1;
+	} else {
+		std.mem.copy(u8, buf, first);
+		pos += first.len;
 	}
 
-	return buf[0..n];
+	for (parts[1..]) |part| {
+		buf[pos] = '.';
+		pos += 1;
+		if (part.len == 0) {
+			pos += std.fmt.formatIntBuf(buf[pos..], indexes[index], 10, .lower, .{});
+			index += 1;
+		} else {
+			std.mem.copy(u8, buf[pos..], part);
+			pos += part.len;
+		}
+	}
+
+	return buf[0..pos];
 }
 
 fn intLength(value: usize) usize {
@@ -149,6 +170,24 @@ fn intLength(value: usize) usize {
 		digits += 1;
 	}
 	return digits;
+}
+
+test "createArrayPath" {
+	{
+		var parts = [_][]const u8{"user", ""};
+		var indexes = [_]usize{0};
+		const actual = try createArrayPath(t.allocator, &parts, &indexes);
+		defer t.allocator.free(actual);
+		try t.expectString("user.0", actual);
+	}
+
+	{
+		var parts = [_][]const u8{"user", "", "fav", ""};
+		var indexes = [_]usize{3, 232};
+		const actual = try createArrayPath(t.allocator, &parts, &indexes);
+		defer t.allocator.free(actual);
+		try t.expectString("user.3.fav.232", actual);
+	}
 }
 
 test "intLength" {

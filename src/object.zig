@@ -28,6 +28,14 @@ pub fn Field(comptime S: type) type {
 		// path == "result.user.id", then name == "id". This is what we use when
 		// generating the field name in the error (we want to display the full path)
 		path: []const u8,
+
+		// The individual parts of the path. Necessary for arrays which require a
+		// dynamically generated path. Essentially, you can imagine a path that's
+		// like: "users.#.favorite.#" would have the following parts:
+		// ["user", "", "favorite", ""]
+		// Only needed when our field is nested under an array, null otherwise
+		parts: ?[][]const u8 = null,
+
 		validator: Validator(S),
 	};
 }
@@ -63,6 +71,17 @@ pub fn Object(comptime S: type) type {
 			var fields = @constCast(self.fields);
 			for (fields) |*field| {
 				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent_path, field.path});
+				if (field.parts) |parts| {
+					const parent_parts = parent.parts.?;
+					var new_parts = try allocator.alloc([]const u8, parent_parts.len + parts.len);
+					for (parent_parts, 0..) |p, i| {
+						new_parts[i] = p;
+					}
+					for (parts, 0..) |p, i| {
+						new_parts[parent_parts.len + i] = p;
+					}
+					field.parts = new_parts;
+				}
 			}
 		}
 

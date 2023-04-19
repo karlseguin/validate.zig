@@ -73,18 +73,14 @@ pub fn Array(comptime S: type) type {
 
 		pub fn nestField(self: *const Self, allocator: Allocator, parent: *v.Field(S)) !void {
 			const path = parent.path;
-			// The first time this validator is added to an object, we mutate the path
-			// to be: path.#
-			// But on subsequent nesting, we don't need to do anything, as the path
-			// already has a ".#" suffix, and any extra nesting just changes the prefix
-			// which our object validator is taking care of.
-			if (path[path.len - 1] != 36) {
-
-				var p = try allocator.alloc(u8, path.len + 2);
-				std.mem.copy(u8, p, path);
-				p[path.len] = '.';
-				p[path.len+1] = 36; // 36 == record separator
-				parent.path = p;
+			// The first time this validator is added to an object, we create the parts
+			// On subsequent nesting, we don't need to do anything (the Object validator
+			// will prepend the parent's parts this)
+			if (parent.parts == null) {
+				var parts = try allocator.alloc([]const u8, 2);
+				parts[0] = path;
+				parts[1] = "";
+				parent.parts = parts;
 			}
 
 			// we still need to notify our validator of the nesting
