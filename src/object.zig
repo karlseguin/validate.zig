@@ -248,8 +248,8 @@ test "object: change value" {
 	}
 }
 
-fn testChangeValue(value: []const u8, _: *Context(void)) !?[]const u8 {
-	if (value[0] == '!') {
+fn testChangeValue(value: ?[]const u8, _: *Context(void)) !?[]const u8 {
+	if (value.?[0] == '!') {
 		return "abc";
 	}
 	return null;

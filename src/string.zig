@@ -21,7 +21,7 @@ pub fn String(comptime S: type) type {
 		min: ?usize,
 		max: ?usize,
 		choices: ?[][]const u8 = null,
-		function: ?*const fn(value: []const u8, context: *Context(S)) anyerror!?[]const u8,
+		function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8,
 		invalid_min: ?v.Invalid,
 		invalid_max: ?v.Invalid,
 		invalid_choices: ?v.Invalid,
@@ -33,7 +33,7 @@ pub fn String(comptime S: type) type {
 			max: ?usize = null,
 			required: bool = false,
 			choices: ?[][]const u8 = null,
-			function: ?*const fn(value: []const u8, context: *Context(S)) anyerror!?[]const u8 = null,
+			function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8 = null,
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
@@ -89,7 +89,7 @@ pub fn String(comptime S: type) type {
 				if (self.required) {
 					try context.add(v.required);
 				}
-				return null;
+				return self.executeFunction(null, context);
 			};
 
 			const value = switch (untyped_value) {
@@ -127,11 +127,14 @@ pub fn String(comptime S: type) type {
 				}
 			}
 
+			return self.executeFunction(value, context);
+		}
+
+		fn executeFunction(self: *const Self, value: ?[]const u8, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
 				return json.Value{.String = transformed};
 			}
-
 			return null;
 		}
 	};
@@ -260,6 +263,12 @@ test "string: function" {
 		try t.expectEqual(true, context.isValid());
 	}
 
+
+	{
+		try t.expectString("is-null", (try validator.validateJsonValue(null, &context)).?.String);
+		try t.expectEqual(true, context.isValid());
+	}
+
 	{
 		context.reset();
 		try t.expectString("19", (try validator.validateJsonValue(.{.String = "change"}, &context)).?.String);
@@ -273,10 +282,12 @@ test "string: function" {
 	}
 }
 
-fn testStringValidator(value: []const u8, context: *Context(i64)) !?[]const u8 {
+fn testStringValidator(value: ?[]const u8, context: *Context(i64)) !?[]const u8 {
 	std.debug.assert(context.state == 101);
 
-	if (std.mem.eql(u8, value, "change")) {
+	const s = value orelse return "is-null";
+
+	if (std.mem.eql(u8, s, "change")) {
 		// test the arena allocator while we're here
 		var alt = try context.allocator.alloc(u8, 2);
 		alt[0] = '1';
@@ -284,7 +295,7 @@ fn testStringValidator(value: []const u8, context: *Context(i64)) !?[]const u8 {
 		return alt;
 	}
 
-	if (std.mem.eql(u8, value, "fail")) {
+	if (std.mem.eql(u8, s, "fail")) {
 		try context.add(v.Invalid{
 			.code = 999,
 			.err = "string validation error",

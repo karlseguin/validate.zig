@@ -22,7 +22,7 @@ pub fn Int(comptime S: type) type {
 		max: ?i64,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
-		function: ?*const fn(value: i64, context: *Context(S)) anyerror!?i64,
+		function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64,
 
 		const Self = @This();
 
@@ -30,7 +30,7 @@ pub fn Int(comptime S: type) type {
 			min: ?i64 = null,
 			max: ?i64 = null,
 			required: bool = false,
-			function: ?*const fn(value: i64, context: *Context(S)) anyerror!?i64 = null,
+			function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64 = null,
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
@@ -74,7 +74,7 @@ pub fn Int(comptime S: type) type {
 				if (self.required) {
 					try context.add(v.required);
 				}
-				return null;
+				return self.executeFunction(null, context);
 			};
 
 			const value = switch (untyped_value) {
@@ -101,11 +101,14 @@ pub fn Int(comptime S: type) type {
 				}
 			}
 
+			return self.executeFunction(value, context);
+		}
+
+		fn executeFunction(self: *const Self, value: ?i64, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
 				return json.Value{.Integer = transformed};
 			}
-
 			return null;
 		}
 	};
@@ -214,6 +217,11 @@ test "int: function" {
 	}
 
 	{
+		try t.expectEqual(@as(i64, -9999), (try validator.validateJsonValue(null, &context)).?.Integer);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
 		context.reset();
 		try t.expectEqual(@as(i64, -38291), (try validator.validateJsonValue(.{.Integer = 2}, &context)).?.Integer);
 		try t.expectEqual(true, context.isValid());
@@ -226,14 +234,16 @@ test "int: function" {
 	}
 }
 
-fn testIntValidator(value: i64, context: *Context(i64)) !?i64 {
+fn testIntValidator(value: ?i64, context: *Context(i64)) !?i64 {
 	std.debug.assert(context.state == 101);
 
-	if (value == 2) {
+	const n = value orelse return -9999;
+
+	if (n == 2) {
 		return -38291;
 	}
 
-	if (value == 3) {
+	if (n == 3) {
 		try context.add(v.Invalid{
 			.code = 998,
 			.err = "int validation error",

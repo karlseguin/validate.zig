@@ -18,16 +18,19 @@ const INVALID_TYPE = v.Invalid{
 pub fn Bool(comptime S: type) type {
 	return struct {
 		required: bool,
+		function: ?*const fn(value: ?bool, context: *Context(S)) anyerror!?bool,
 
 		const Self = @This();
 
 		pub const Config = struct {
 			required: bool = false,
+			function: ?*const fn(value: ?bool, context: *Context(S)) anyerror!?bool = null,
 		};
 
 		pub fn init(_: Allocator, config: Config) !Self {
 			return .{
 				.required = config.required,
+				.function = config.function,
 			};
 		}
 
@@ -43,16 +46,26 @@ pub fn Bool(comptime S: type) type {
 				if (self.required) {
 					try context.add(v.required);
 				}
-				return null;
+				return self.executeFunction(null, context);
 			};
 
-			switch (untyped_value) {
-				.Bool => return null,
+			const value = switch (untyped_value) {
+				.Bool => |b| b,
 				else => {
 					try context.add(INVALID_TYPE);
 					return null;
 				}
+			};
+
+			return self.executeFunction(value, context);
+		}
+
+		fn executeFunction(self: *const Self, value: ?bool, context: *Context(S)) !?json.Value {
+			if (self.function) |f| {
+				const transformed = try f(value, context) orelse return null;
+				return json.Value{.Bool = transformed};
 			}
+			return null;
 		}
 	};
 }
@@ -104,5 +117,3 @@ test "bool: type" {
 		try t.expectEqual(true, context.isValid());
 	}
 }
-
-

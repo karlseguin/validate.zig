@@ -22,7 +22,7 @@ pub fn Float(comptime S: type) type {
 		max: ?f64,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
-		function: ?*const fn(value: f64, context: *Context(S)) anyerror!?f64,
+		function: ?*const fn(value: ?f64, context: *Context(S)) anyerror!?f64,
 
 		const Self = @This();
 
@@ -30,7 +30,7 @@ pub fn Float(comptime S: type) type {
 			min: ?f64 = null,
 			max: ?f64 = null,
 			required: bool = false,
-			function: ?*const fn(value: f64, context: *Context(S)) anyerror!?f64 = null,
+			function: ?*const fn(value: ?f64, context: *Context(S)) anyerror!?f64 = null,
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
@@ -74,7 +74,7 @@ pub fn Float(comptime S: type) type {
 				if (self.required) {
 					try context.add(v.required);
 				}
-				return null;
+				return self.executeFunction(null, context);
 			};
 
 			const value = switch (untyped_value) {
@@ -101,11 +101,14 @@ pub fn Float(comptime S: type) type {
 				}
 			}
 
+			return self.executeFunction(value, context);
+		}
+
+		fn executeFunction(self: *const Self, value: ?f64, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
 				return json.Value{.Float = transformed};
 			}
-
 			return null;
 		}
 	};
@@ -213,6 +216,11 @@ test "float: function" {
 	}
 
 	{
+		try t.expectEqual(@as(f64, -9999.88), (try validator.validateJsonValue(null, &context)).?.Float);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
 		context.reset();
 		try t.expectEqual(@as(f64, -38291.2), (try validator.validateJsonValue(.{.Float = 2.1}, &context)).?.Float);
 		try t.expectEqual(true, context.isValid());
@@ -225,14 +233,16 @@ test "float: function" {
 	}
 }
 
-fn testFloatValidator(value: f64, context: *Context(f64)) !?f64 {
+fn testFloatValidator(value: ?f64, context: *Context(f64)) !?f64 {
 	std.debug.assert(context.state == 101);
 
-	if (value == 2.1) {
+	const f = value orelse return -9999.88;
+
+	if (f == 2.1) {
 		return -38291.2;
 	}
 
-	if (value == 3.2) {
+	if (f == 3.2) {
 		try context.add(v.Invalid{
 			.code = 997,
 			.err = "float validation error",
