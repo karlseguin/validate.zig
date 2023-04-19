@@ -80,5 +80,11 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 		}
 		return;
 	}
+	var arr = std.ArrayList(u8).init(allocator);
+	defer arr.deinit();
+
+	try std.json.stringify(context.errors(), .{.whitespace = .{.indent_level = 1}}, arr.writer());
+	std.debug.print("\nReceived these errors:\n {s}\n", .{arr.items});
+
 	return error.MissingExpectedInvalid;
 }

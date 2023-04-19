@@ -37,8 +37,8 @@ pub fn Object(comptime S: type) type {
 		};
 
 		pub fn init(allocator: Allocator, fields: []const Field(S), config: Config) !Self {
-			for (fields) |field| {
-				try field.validator.nestField(allocator, field.name);
+			for (@constCast(fields)) |*field| {
+				try field.validator.nestField(allocator, field);
 			}
 
 			return .{
@@ -51,11 +51,11 @@ pub fn Object(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		// part of the Validator interface, but noop for strings
-		pub fn nestField(self: *const Self, allocator: Allocator, parent: []const u8) !void {
+		pub fn nestField(self: *const Self, allocator: Allocator, parent: *Field(S)) !void {
+			const parent_path = parent.path;
 			var fields = @constCast(self.fields);
 			for (fields) |*field| {
-				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent, field.path});
+				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent_path, field.path});
 			}
 		}
 
@@ -108,7 +108,7 @@ pub fn Object(comptime S: type) type {
 
 const nullJson = @as(?json.Value, null);
 test "object: required" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -129,7 +129,7 @@ test "object: required" {
 }
 
 test "object: type" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -141,7 +141,7 @@ test "object: type" {
 }
 
 test "object: field" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -158,7 +158,7 @@ test "object: field" {
 }
 
 test "object: nested" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 10, .max_depth = 2}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 10, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -198,7 +198,7 @@ test "object: nested" {
 }
 
 test "object: change value" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 2}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);

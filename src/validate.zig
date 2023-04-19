@@ -1,5 +1,6 @@
 const codes = @import("codes.zig");
 
+pub const Field = @import("object.zig").Field;
 pub const Builder = @import("builder.zig").Builder;
 
 pub const Invalid = struct {
@@ -53,4 +54,5 @@ test {
 	const std = @import("std");
 	std.testing.refAllDecls(@This());
 	_ = @import("object.zig");
+	_ = @import("array.zig");
 }

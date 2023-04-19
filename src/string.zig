@@ -82,7 +82,7 @@ pub fn String(comptime S: type) type {
 		}
 
 		// part of the Validator interface, but noop for strings
-		pub fn nestField(_: *const Self, _: Allocator, _: []const u8) !void {}
+		pub fn nestField(_: *const Self, _: Allocator, _: *v.Field(S)) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = input orelse {
@@ -139,7 +139,7 @@ pub fn String(comptime S: type) type {
 
 const nullJson = @as(?json.Value, null);
 test "string: required" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -160,7 +160,7 @@ test "string: required" {
 }
 
 test "string: type" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -172,7 +172,7 @@ test "string: type" {
 }
 
 test "string: min length" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -198,7 +198,7 @@ test "string: min length" {
 }
 
 test "string: max length" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -225,7 +225,7 @@ test "string: max length" {
 }
 
 test "string: choices" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -247,7 +247,7 @@ test "string: choices" {
 }
 
 test "string: function" {
-	var context = try Context(i64).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, 101);
+	var context = try Context(i64).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, 101);
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(i64).init(t.allocator);

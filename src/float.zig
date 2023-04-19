@@ -67,7 +67,7 @@ pub fn Float(comptime S: type) type {
 		}
 
 		// part of the Validator interface, but noop for floats
-		pub fn nestField(_: *const Self, _: Allocator, _: []const u8) !void {}
+		pub fn nestField(_: *const Self, _: Allocator, _: *v.Field(S)) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = input orelse {
@@ -113,7 +113,7 @@ pub fn Float(comptime S: type) type {
 
 const nullJson = @as(?json.Value, null);
 test "float: required" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -134,7 +134,7 @@ test "float: required" {
 }
 
 test "float: type" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -146,7 +146,7 @@ test "float: type" {
 }
 
 test "float: min" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -172,7 +172,7 @@ test "float: min" {
 }
 
 test "float: max" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, {});
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
@@ -199,7 +199,7 @@ test "float: max" {
 }
 
 test "float: function" {
-	var context = try Context(f64).init(t.allocator, .{.max_errors = 2, .max_depth = 1}, 101);
+	var context = try Context(f64).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, 101);
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(f64).init(t.allocator);

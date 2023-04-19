@@ -7,6 +7,7 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 const Int = @import("int.zig").Int;
 const Bool = @import("bool.zig").Bool;
 const Float = @import("float.zig").Float;
+const Array = @import("array.zig").Array;
 const String = @import("string.zig").String;
 const Validator = @import("validator.zig").Validator;
 const Field = object.Field;
@@ -51,6 +52,10 @@ pub fn Builder(comptime S: type) type {
 
 		pub fn string(self: Self, config: String(S).Config) !String(S) {
 			return String(S).init(self.allocator, config);
+		}
+
+		pub fn array(self: Self, validator: anytype, config: Array(S).Config) !Array(S) {
+			return Array(S).init(self.allocator, validator, config);
 		}
 
 		pub fn object(self: Self, fields: []const Field(S), config: Object(S).Config) !Object(S) {
