@@ -19,7 +19,14 @@ const INVALID_TYPE = v.Invalid{
 
 pub fn Field(comptime S: type) type {
 	return struct {
+		// This is the name of the field in the object. Used when we get the value
+		// out of the map
 		name: []const u8,
+
+		// This is the full path of the field, including nesting. If we forget about
+		// arrays for a second, field.name is always the suffix of field.path. So if
+		// path == "result.user.id", then name == "id". This is what we use when
+		// generating the field name in the error (we want to display the full path)
 		path: []const u8,
 		validator: Validator(S),
 	};

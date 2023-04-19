@@ -155,7 +155,7 @@ test "float: min" {
 	const validator = try builder.float(.{.min = 4.2});
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
-		try t.expectInvalid(.{.code = codes.FLOAT_MIN, .data_fmin = 4.2}, context);
+		try t.expectInvalid(.{.code = codes.FLOAT_MIN, .data_fmin = 4.2, .err = "cannot be less than 4.2"}, context);
 	}
 
 	{

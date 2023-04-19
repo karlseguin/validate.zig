@@ -274,35 +274,3 @@ test "array: deeplys nested field name" {
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.1"}, context);
 	}
 }
-
-// test "array: change value" {
-// 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
-// 	defer context.deinit(t.allocator);
-
-// 	const builder = try Builder(void).init(t.allocator);
-// 	defer builder.deinit(t.allocator);
-
-// 	const nameValidator = try builder.string(.{.function = testChangeValue});
-// 	const objectValidator = try builder.object(&.{
-// 		builder.field("name", &nameValidator),
-// 	}, .{});
-
-// 	{
-// 		const typed = try objectValidator.validateJson("{\"name\": \"normal\"}", &context) orelse unreachable;
-// 		try t.expectEqual(true, context.isValid());
-// 		try t.expectString("normal", typed.string("name").?);
-// 	}
-
-// 	{
-// 		const typed = try objectValidator.validateJson("{\"name\": \"!\"}", &context) orelse unreachable;
-// 		try t.expectEqual(true, context.isValid());
-// 		try t.expectString("abc", typed.string("name").?);
-// 	}
-// }
-
-// fn testChangeValue(value: []const u8, _: *Context(void)) !?[]const u8 {
-// 	if (value[0] == '!') {
-// 		return "abc";
-// 	}
-// 	return null;
-// }

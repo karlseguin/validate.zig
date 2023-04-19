@@ -8,8 +8,8 @@ const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
 const InvalidField = struct {
-	code: i64,
 	field: ?[]const u8,
+	code: i64,
 	err: []const u8,
 	data: ?v.InvalidData,
 };
