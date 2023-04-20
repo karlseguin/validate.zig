@@ -39,19 +39,21 @@ pub fn String(comptime S: type) type {
 		pub fn init(allocator: Allocator, config: Config) !Self {
 			var invalid_min: ?v.Invalid = null;
 			if (config.min) |m| {
+				const plural = if (m == 1) "" else "s";
 				invalid_min = v.Invalid{
 					.code = codes.STRING_LEN_MIN,
 					.data = .{.imin = .{.min = @intCast(i64, m) }},
-					.err = try std.fmt.allocPrint(allocator, "must have at least {d} characters", .{m}),
+					.err = try std.fmt.allocPrint(allocator, "must have at least {d} character{s}", .{m, plural}),
 				};
 			}
 
 			var invalid_max: ?v.Invalid = null;
 			if (config.max) |m| {
+				const plural = if (m == 1) "" else "s";
 				invalid_max = v.Invalid{
 					.code = codes.STRING_LEN_MAX,
 					.data = .{.imax = .{.max = @intCast(i64, m) }},
-					.err = try std.fmt.allocPrint(allocator, "must no more than {d} characters", .{m}),
+					.err = try std.fmt.allocPrint(allocator, "must have no more than {d} character{s}", .{m, plural}),
 				};
 			}
 
@@ -184,7 +186,7 @@ test "string: min length" {
 	const validator = try builder.string(.{.min = 4});
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abc"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 4}, context);
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 4, .err = "must have at least 4 characters"}, context);
 	}
 
 	{
@@ -197,6 +199,12 @@ test "string: min length" {
 		context.reset();
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abcde"}, &context));
 		try t.expectEqual(true, context.isValid());
+	}
+
+	const singular = try builder.string(.{.min = 1});
+	{
+		try t.expectEqual(nullJson, try singular.validateJsonValue(.{.String = ""}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 1, .err = "must have at least 1 character"}, context);
 	}
 }
 
@@ -211,7 +219,7 @@ test "string: max length" {
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abcde"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 4}, context);
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 4, .err = "must have no more than 4 characters"}, context);
 	}
 
 	{
@@ -224,6 +232,12 @@ test "string: max length" {
 		context.reset();
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abc"}, &context));
 		try t.expectEqual(true, context.isValid());
+	}
+
+	const singular = try builder.string(.{.max = 1});
+	{
+		try t.expectEqual(nullJson, try singular.validateJsonValue(.{.String = "123"}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 1, .err = "must have no more than 1 character"}, context);
 	}
 }
 

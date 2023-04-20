@@ -36,19 +36,21 @@ pub fn Array(comptime S: type) type {
 		pub fn init(allocator: Allocator, optional_validator: anytype, config: Config) !Self {
 			var invalid_min: ?v.Invalid = null;
 			if (config.min) |m| {
+				const plural = if (m == 1) "" else "s";
 				invalid_min = v.Invalid{
 					.code = codes.ARRAY_LEN_MIN,
 					.data = .{.imin = .{.min = @intCast(i64, m) }},
-					.err = try std.fmt.allocPrint(allocator, "must have at least {d} items", .{m}),
+					.err = try std.fmt.allocPrint(allocator, "must have at least {d} item{s}", .{m, plural}),
 				};
 			}
 
 			var invalid_max: ?v.Invalid = null;
 			if (config.max) |m| {
+				const plural = if (m == 1) "" else "s";
 				invalid_max = v.Invalid{
 					.code = codes.ARRAY_LEN_MAX,
 					.data = .{.imax = .{.max = @intCast(i64, m) }},
-					.err = try std.fmt.allocPrint(allocator, "must no more than {d} items", .{m}),
+					.err = try std.fmt.allocPrint(allocator, "must no more than {d} item{s}", .{m, plural}),
 				};
 			}
 
