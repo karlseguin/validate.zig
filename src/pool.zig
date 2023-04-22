@@ -3,7 +3,7 @@ const t = @import("t.zig");
 const v = @import("validate.zig");
 
 const Allocator = std.mem.Allocator;
-const Config = struct{
+pub const Config = struct{
 	size: u16 = 50,
 	max_errors: u16 = 20,
 	max_nesting: u8 = 10,

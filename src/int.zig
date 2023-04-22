@@ -123,14 +123,14 @@ test "int: required" {
 	defer builder.deinit(t.allocator);
 
 	{
-		const validator = try builder.int(.{.required = true});
+		const validator = builder.int(.{.required = true});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		const validator = try builder.int(.{.required = false});
+		const validator = builder.int(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -143,7 +143,7 @@ test "int: type" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.int(.{});
+	const validator = builder.int(.{});
 	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "NOPE"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_INT}, context);
 }
@@ -155,7 +155,7 @@ test "int: min" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.int(.{.min = 4});
+	const validator = builder.int(.{.min = 4});
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 3}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MIN, .data_min = 4}, context);
@@ -182,7 +182,7 @@ test "int: max" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.int(.{.max = 4});
+	const validator = builder.int(.{.max = 4});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 5}, &context));
@@ -209,7 +209,7 @@ test "int: function" {
 	const builder = try Builder(i64).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.int(.{.function = testIntValidator});
+	const validator = builder.int(.{.function = testIntValidator});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 99}, &context));

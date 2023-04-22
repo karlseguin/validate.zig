@@ -151,14 +151,14 @@ test "string: required" {
 	defer builder.deinit(t.allocator);
 
 	{
-		const validator = try builder.string(.{.required = true});
+		const validator = builder.string(.{.required = true});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		const validator = try builder.string(.{.required = false});
+		const validator = builder.string(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -171,7 +171,7 @@ test "string: type" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.string(.{});
+	const validator = builder.string(.{});
 	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 33}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_STRING}, context);
 }
@@ -183,7 +183,7 @@ test "string: min length" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.string(.{.min = 4});
+	const validator = builder.string(.{.min = 4});
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abc"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 4, .err = "must have at least 4 characters"}, context);
@@ -201,7 +201,7 @@ test "string: min length" {
 		try t.expectEqual(true, context.isValid());
 	}
 
-	const singular = try builder.string(.{.min = 1});
+	const singular = builder.string(.{.min = 1});
 	{
 		try t.expectEqual(nullJson, try singular.validateJsonValue(.{.String = ""}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 1, .err = "must have at least 1 character"}, context);
@@ -215,7 +215,7 @@ test "string: max length" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.string(.{.max = 4});
+	const validator = builder.string(.{.max = 4});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abcde"}, &context));
@@ -234,7 +234,7 @@ test "string: max length" {
 		try t.expectEqual(true, context.isValid());
 	}
 
-	const singular = try builder.string(.{.max = 1});
+	const singular = builder.string(.{.max = 1});
 	{
 		try t.expectEqual(nullJson, try singular.validateJsonValue(.{.String = "123"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 1, .err = "must have no more than 1 character"}, context);
@@ -249,7 +249,7 @@ test "string: choices" {
 	defer builder.deinit(t.allocator);
 
 	var choices = [_][]const u8{"one", "two", "three"};
-	const validator = try builder.string(.{.choices = &choices});
+	const validator = builder.string(.{.choices = &choices});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "nope"}, &context));
@@ -270,7 +270,7 @@ test "string: function" {
 	const builder = try Builder(i64).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.string(.{.function = testStringValidator});
+	const validator = builder.string(.{.function = testStringValidator});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "ok"}, &context));

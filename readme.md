@@ -21,21 +21,21 @@ var builder = try validate.Builder(void).init(allocator);
 // defer builder.deinit(allocator);
 
 // Next we use out builder to create a validator for each of the individual fields:
-var yearValidator = try builder.int(.{.min = 1900, .max = 2050, .required = true});
-var titleValidator = try builder.string(.{.min = 2, .max = 100, .required = true});
-var scoreValidator = try builder.float(.{.min = 0, .max = 10});
+var yearValidator = builder.int(.{.min = 1900, .max = 2050, .required = true});
+var titleValidator = builder.string(.{.min = 2, .max = 100, .required = true});
+var scoreValidator = builder.float(.{.min = 0, .max = 10});
 
 // We can validate nested objects and arrays
 var movieTags = [_][]const u8{"action", "sci-fi", "drama"};
-var tagValidator = try builder.string(.{.choices = &movieTags});
+var tagValidator = builder.string(.{.choices = &movieTags});
 
 // An array validator is like any other validator, except the first parameter is an optional
 // validator to apply to each element in the array.
-var tagsValidator = try builder.array(&tagValidator, .{.max = 5});
+var tagsValidator = builder.array(&tagValidator, .{.max = 5});
 
 // An object validate is like any other validator, except the first parameter is a list of
 // fields which is the name and the validator to apply to it:
-const movieValidator = try builder.object(&.{
+const movieValidator = builder.object(&.{
     builder.field("year", &yearValidator),
     builder.field("title", &titleValidator),
     builder.field("score", &scoreValidator),
@@ -113,7 +113,7 @@ The `Builder` and `Context` types explored above are actually generic functions 
 var builder = try validate.Builder(*Custom).init(allocator);
 
 // Our nameValidator specifies a custom validation function, `validateName`
-var nameValidator = try builder.string({.required = true, .function = validateName})
+var nameValidator = builder.string({.required = true, .function = validateName})
 ...
 
 

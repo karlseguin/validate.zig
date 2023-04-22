@@ -7,11 +7,23 @@ const M = @This();
 pub const Typed = struct {
 	root: json.ObjectMap,
 
+	pub fn wrap(root: json.ObjectMap) Typed {
+		return .{.root = root};
+	}
+
+	pub fn count(self: Typed) usize {
+		return self.root.count();
+	}
+
 	pub fn int(self: Typed, field: []const u8) ?i64 {
 		if (self.root.get(field)) |v| {
 			return M.int(v);
 		}
 		return null;
+	}
+
+	pub fn intOr(self: Typed, field: []const u8, default: i64) i64 {
+		return self.int(field) orelse default;
 	}
 
 	pub fn boolean(self: Typed, field: []const u8) ?bool {
@@ -21,6 +33,10 @@ pub const Typed = struct {
 		return null;
 	}
 
+	pub fn booleanOr(self: Typed, field: []const u8, default: bool) bool {
+		return self.boolean(field) orelse default;
+	}
+
 	pub fn float(self: Typed, field: []const u8) ?f64 {
 		if (self.root.get(field)) |v| {
 			return M.float(v);
@@ -28,11 +44,19 @@ pub const Typed = struct {
 		return null;
 	}
 
+	pub fn floatOr(self: Typed, field: []const u8, default: f64) f64 {
+		return self.float(field) orelse default;
+	}
+
 	pub fn string(self: Typed, field: []const u8) ?[]const u8 {
 		if (self.root.get(field)) |v| {
 			return M.string(v);
 		}
 		return null;
+	}
+
+	pub fn stringOr(self: Typed, field: []const u8, default: []const u8) []const u8 {
+		return self.string(field) orelse default;
 	}
 
 	pub fn array(self: Typed, field: []const u8) ?json.Array {
@@ -110,18 +134,26 @@ test "typed: field access" {
 	try t.expectEqual(false, typed.boolean("coffee").?);
 	try t.expectEqual(@as(?bool, null), typed.boolean("nope"));
 	try t.expectEqual(@as(?bool, null), typed.boolean("quality"));
+	try t.expectEqual(true, typed.booleanOr("tea", false));
+	try t.expectEqual(true, typed.booleanOr("nope", true));
 
 	try t.expectEqual(@as(f64, 9.4), typed.float("quality").?);
 	try t.expectEqual(@as(?f64, null), typed.float("nope"));
 	try t.expectEqual(@as(?f64, null), typed.float("tea"));
+	try t.expectEqual(@as(f64, 9.4), typed.floatOr("quality", 0.1));
+	try t.expectEqual(@as(f64, 0.32), typed.floatOr("nope", 0.32));
 
 	try t.expectEqual(@as(i64, 88), typed.int("quantity").?);
 	try t.expectEqual(@as(?i64, null), typed.int("coffee"));
 	try t.expectEqual(@as(?i64, null), typed.int("quality"));
+	try t.expectEqual(@as(i64, 88), typed.intOr("quantity", -3));
+	try t.expectEqual(@as(?i64, -32), typed.intOr("coffee", -32));
 
 	try t.expectString(@as([]const u8, "keemun"), typed.string("type").?);
 	try t.expectEqual(@as(?[]const u8, null), typed.string("coffee"));
 	try t.expectEqual(@as(?[]const u8, null), typed.string("quality"));
+	try t.expectString(@as([]const u8, "keemun"), typed.stringOr("type", "heh"));
+	try t.expectString(@as([]const u8, "high"), typed.stringOr("quality", "high"));
 
 	try t.expectEqual(@as(i64, 9000), typed.object("power").?.int("over").?);
 	try t.expectEqual(@as(?Typed, null), typed.object("nope"));

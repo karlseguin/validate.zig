@@ -133,14 +133,14 @@ test "float: required" {
 	defer builder.deinit(t.allocator);
 
 	{
-		const validator = try builder.float(.{.required = true});
+		const validator = builder.float(.{.required = true});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		const validator = try builder.float(.{.required = false});
+		const validator = builder.float(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -153,7 +153,7 @@ test "float: type" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.float(.{});
+	const validator = builder.float(.{});
 	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "NOPE"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_FLOAT}, context);
 }
@@ -165,7 +165,7 @@ test "float: strict" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.float(.{.strict = true});
+	const validator = builder.float(.{.strict = true});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
@@ -186,7 +186,7 @@ test "float: not strict" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.float(.{});
+	const validator = builder.float(.{});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
@@ -207,7 +207,7 @@ test "float: min" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.float(.{.min = 4.2});
+	const validator = builder.float(.{.min = 4.2});
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
 		try t.expectInvalid(.{.code = codes.FLOAT_MIN, .data_fmin = 4.2, .err = "cannot be less than 4.2"}, context);
@@ -233,7 +233,7 @@ test "float: max" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.float(.{.max = 4.1});
+	const validator = builder.float(.{.max = 4.1});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.2}, &context));
@@ -260,7 +260,7 @@ test "float: function" {
 	const builder = try Builder(f64).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.float(.{.function = testFloatValidator});
+	const validator = builder.float(.{.function = testFloatValidator});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 99.1}, &context));

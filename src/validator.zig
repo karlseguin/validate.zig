@@ -8,7 +8,6 @@ const Allocator = std.mem.Allocator;
 
 pub fn Validator(comptime S: type) type {
 	return struct {
-		array: bool,
 		ptr: *const anyopaque,
 		validateFn: *const fn(*const anyopaque, value: ?json.Value, context: *Context(S)) anyerror!?json.Value,
 		nestFieldFn: *const fn(*const anyopaque, allocator: Allocator, parent: *Field(S)) anyerror!void,
@@ -16,6 +15,9 @@ pub fn Validator(comptime S: type) type {
 		pub fn init(ptr: anytype) Validator(S) {
 			const Ptr = @TypeOf(ptr);
 			const ptr_info = @typeInfo(Ptr);
+
+			if (ptr_info != .Pointer) @compileError("ptr must be a pointer");
+			if (ptr_info.Pointer.size != .One) @compileError("ptr must be a single item pointer");
 
 			const alignment = ptr_info.Pointer.alignment;
 
@@ -34,7 +36,6 @@ pub fn Validator(comptime S: type) type {
 					.ptr = ptr,
 					.validateFn = gen.validateImpl,
 					.nestFieldFn = gen.nestFieldImpl,
-					.array = ptr_info.Pointer.child == Array(S),
 			};
 		}
 

@@ -33,7 +33,7 @@ pub fn Array(comptime S: type) type {
 			max: ?usize = null,
 		};
 
-		pub fn init(allocator: Allocator, optional_validator: anytype, config: Config) !Self {
+		pub fn init(allocator: Allocator, item_validator: anytype, config: Config) !Self {
 			var invalid_min: ?v.Invalid = null;
 			if (config.min) |m| {
 				const plural = if (m == 1) "" else "s";
@@ -55,8 +55,8 @@ pub fn Array(comptime S: type) type {
 			}
 
 			var val: ?Validator(S) = null;
-			if (@TypeOf(optional_validator) != @TypeOf(null)) {
-				val = optional_validator.validator();
+			if (@TypeOf(item_validator) != @TypeOf(null)) {
+				val = item_validator.validator();
 			}
 
 			return .{
@@ -150,14 +150,14 @@ test "array: required" {
 	defer builder.deinit(t.allocator);
 
 	{
-		const validator = try builder.array(null, .{.required = true});
+		const validator = builder.array(null, .{.required = true});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		const validator = try builder.array(null, .{.required = false});
+		const validator = builder.array(null, .{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -170,7 +170,7 @@ test "array: type" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.array(null, .{});
+	const validator = builder.array(null, .{});
 	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "Hi"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_ARRAY}, context);
 }
@@ -182,25 +182,25 @@ test "array: min length" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const arrayValidator = try builder.array(null, .{.min = 2});
-	const objectValidator = try builder.object(&.{
+	const arrayValidator = builder.array(null, .{.min = 2});
+	const objectValidator = builder.object(&.{
 		builder.field("items", &arrayValidator),
 	}, .{});
 
 	{
-		_ = try objectValidator.validateJson("{\"items\": []}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": []}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MIN}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJson("{\"items\": [1]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1]}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MIN}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJson("{\"items\": [1, 2]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -212,25 +212,25 @@ test "array: max length" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const arrayValidator = try builder.array(null, .{.max = 3});
-	const objectValidator = try builder.object(&.{
+	const arrayValidator = builder.array(null, .{.max = 3});
+	const objectValidator = builder.object(&.{
 		builder.field("items", &arrayValidator),
 	}, .{});
 
 	{
-		_ = try objectValidator.validateJson("{\"items\": [1, 2, 3, 4]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 3, 4]}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MAX}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJson("{\"items\": [1, 2, 3]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 3]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJson("{\"items\": [1, 2]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -242,14 +242,14 @@ test "array: nested" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const itemValidator = try builder.int(.{.min = 4});
-	const arrayValidator = try builder.array(&itemValidator, .{});
-	const objectValidator = try builder.object(&.{
+	const itemValidator = builder.int(.{.min = 4});
+	const arrayValidator = builder.array(&itemValidator, .{});
+	const objectValidator = builder.object(&.{
 		builder.field("items", &arrayValidator),
 	}, .{});
 
 	{
-		_ = try objectValidator.validateJson("{\"items\": [1, 2, 5]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 5]}", &context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.1"}, context);
 	}
@@ -262,14 +262,14 @@ test "array: deeplys nested field name" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const favValidator = try builder.int(.{.min = 4});
-	const favArrayValidator = try builder.array(&favValidator, .{});
-	const itemValidator = try builder.object(&.{builder.field("fav", &favArrayValidator)}, .{});
-	const itemsArrayValidator = try builder.array(&itemValidator, .{});
-	const objectValidator = try builder.object(&.{builder.field("items", &itemsArrayValidator)}, .{});
+	const favValidator = builder.int(.{.min = 4});
+	const favArrayValidator = builder.array(&favValidator, .{});
+	const itemValidator = builder.object(&.{builder.field("fav", &favArrayValidator)}, .{});
+	const itemsArrayValidator = builder.array(&itemValidator, .{});
+	const objectValidator = builder.object(&.{builder.field("items", &itemsArrayValidator)}, .{});
 
 	{
-		_ = try objectValidator.validateJson("{\"items\": [{\"fav\": [1,2]}]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [{\"fav\": [1,2]}]}", &context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.1"}, context);
 	}
@@ -282,14 +282,14 @@ test "array: change value" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const itemValidator = try builder.int(.{.function = testArrayChangeValue});
-	const arrayValidator = try builder.array(&itemValidator, .{});
-	const objectValidator = try builder.object(&.{
+	const itemValidator = builder.int(.{.function = testArrayChangeValue});
+	const arrayValidator = builder.array(&itemValidator, .{});
+	const objectValidator = builder.object(&.{
 		builder.field("items", &arrayValidator),
 	}, .{});
 
 	{
-		const typed = (try objectValidator.validateJson("{\"items\": [1, 2, -5]}", &context)).?;
+		const typed = (try objectValidator.validateJsonS("{\"items\": [1, 2, -5]}", &context)).?;
 		try t.expectEqual(true, context.isValid());
 		const items = typed.array("items").?.items;
 		try t.expectEqual(@as(i64, -1), items[0].Integer);

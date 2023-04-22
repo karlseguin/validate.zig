@@ -79,7 +79,7 @@ test "bool: required" {
 	defer builder.deinit(t.allocator);
 
 	{
-		const validator = try builder.boolean(.{.required = true});
+		const validator = builder.boolean(.{.required = true});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
@@ -87,7 +87,7 @@ test "bool: required" {
 	{
 
 		t.reset(&context);
-		const validator = try builder.boolean(.{.required = false});
+		const validator = builder.boolean(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -100,7 +100,7 @@ test "bool: type" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = try builder.boolean(.{});
+	const validator = builder.boolean(.{});
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "NOPE"}, &context));
 		try t.expectInvalid(.{.code = codes.TYPE_BOOL}, context);
