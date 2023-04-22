@@ -18,6 +18,13 @@ const InvalidExpectation = struct {
 	data_fmax: ?f64 = null,
 };
 
+pub fn reset(context: anytype) void {
+	var c = context;
+	c.field = null;
+	c._error_len = 0;
+	c._nesting_idx = null;
+}
+
 pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 	// We're going to loop through all the errors, looking for the expected one
 	for (context.errors()) |invalid| {

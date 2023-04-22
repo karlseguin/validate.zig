@@ -147,7 +147,7 @@ test "object: required" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		const validator = try builder.object(&.{}, .{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
@@ -208,13 +208,13 @@ test "object: nested" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		_ = try dataValidator.validateJson("{\"user\": 3}", &context);
 		try t.expectInvalid(.{.code = codes.TYPE_OBJECT, .field = "user"}, context);
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		_ = try dataValidator.validateJson("{\"user\": {}}", &context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.name"}, context);

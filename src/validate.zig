@@ -1,7 +1,9 @@
 const codes = @import("codes.zig");
 
+pub const Pool = @import("pool.zig").Pool;
 pub const Field = @import("object.zig").Field;
 pub const Builder = @import("builder.zig").Builder;
+pub const Context = @import("context.zig").Context;
 
 pub const Invalid = struct {
 	code: i64,

@@ -156,7 +156,7 @@ test "array: required" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		const validator = try builder.array(null, .{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
@@ -193,13 +193,13 @@ test "array: min length" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		_ = try objectValidator.validateJson("{\"items\": [1]}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MIN}, context);
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		_ = try objectValidator.validateJson("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
@@ -223,13 +223,13 @@ test "array: max length" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		_ = try objectValidator.validateJson("{\"items\": [1, 2, 3]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		_ = try objectValidator.validateJson("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}

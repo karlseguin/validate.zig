@@ -85,7 +85,8 @@ test "bool: required" {
 	}
 
 	{
-		context.reset();
+
+		t.reset(&context);
 		const validator = try builder.boolean(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
@@ -106,13 +107,13 @@ test "bool: type" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Bool = true}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Bool = false}, &context));
 		try t.expectEqual(true, context.isValid());
 	}

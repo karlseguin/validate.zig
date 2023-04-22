@@ -139,7 +139,7 @@ test "float: required" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		const validator = try builder.float(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
@@ -173,7 +173,7 @@ test "float: strict" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 99}, &context));
 		try t.expectInvalid(.{.code = codes.TYPE_FLOAT}, context);
 	}
@@ -194,7 +194,7 @@ test "float: not strict" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 99}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -214,13 +214,13 @@ test "float: min" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.2}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 293.2}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -241,13 +241,13 @@ test "float: max" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = -33.2}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -273,13 +273,13 @@ test "float: function" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(@as(f64, -38291.2), (try validator.validateJsonValue(.{.Float = 2.1}, &context)).?.Float);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 3.2}, &context));
 		try t.expectInvalid(.{.code = 997, .err = "float validation error"}, context);
 	}

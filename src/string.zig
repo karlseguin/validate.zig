@@ -157,7 +157,7 @@ test "string: required" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		const validator = try builder.string(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
 		try t.expectEqual(true, context.isValid());
@@ -190,13 +190,13 @@ test "string: min length" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abcd"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abcde"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -223,13 +223,13 @@ test "string: max length" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abcd"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "abc"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -257,7 +257,7 @@ test "string: choices" {
 	}
 
 	for (choices) |choice| {
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = choice}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -284,13 +284,13 @@ test "string: function" {
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectString("19", (try validator.validateJsonValue(.{.String = "change"}, &context)).?.String);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		context.reset();
+		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "fail"}, &context));
 		try t.expectInvalid(.{.code = 999, .err = "string validation error"}, context);
 	}

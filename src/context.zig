@@ -21,6 +21,7 @@ pub fn Context(comptime S: type) type {
 		_arena: *ArenaAllocator,
 		_nesting: []usize,
 		_nesting_idx: ?u8,
+		_from_pool: bool,
 		state: S,
 		allocator: Allocator,
 		field: ?Field(S),
@@ -30,9 +31,12 @@ pub fn Context(comptime S: type) type {
 		pub const Config = struct {
 			max_errors: u16 = 20,
 			max_nesting: u8 = 10,
+			from_pool: bool = false,
 		};
 
 		pub fn init(allocator: Allocator, config: Config, state: S) !Self {
+			const from_pool = config.from_pool;
+
 			var arena = try allocator.create(ArenaAllocator);
 			errdefer allocator.destroy(arena);
 
@@ -41,27 +45,38 @@ pub fn Context(comptime S: type) type {
 
 			const aa = arena.allocator();
 
+			// If this context is being created for the Pool, it means we plan on
+			// re-using it. In this case, the _errors and _nesting are created
+			// with the parent allocator. We still created an arena allocator for
+			// any allocation we need while the context is checked out.
+			// If the context is not created for the Pool, we can optimize the
+			// code a little and use our arena allocator for _errors and _nesting.
+			const persistent_allocator = if (from_pool) allocator else aa;
+			const _errors = try persistent_allocator.alloc(InvalidField, config.max_errors);
+			const _nesting = try persistent_allocator.alloc(usize, config.max_nesting);
+
 			return .{
-				._arena = arena,
-				._error_len = 0,
-				._errors = try aa.alloc(InvalidField, config.max_errors),
-				._nesting_idx = null,
-				._nesting = try aa.alloc(usize, config.max_nesting),
 				.state = state,
 				.field = null,
-				.allocator = arena.allocator(),
+				.allocator = aa,
+				._arena = arena,
+				._error_len = 0,
+				._nesting_idx = null,
+				._errors = _errors,
+				._nesting = _nesting,
+				._from_pool = from_pool,
 			};
 		}
 
 		pub fn deinit(self: *Self, allocator: Allocator) void {
 			self._arena.deinit();
+			if (self._from_pool) {
+				// if this context wasn't pooled, then _errors and _nesting
+				// were created using the arena allocator
+				allocator.free(self._errors);
+				allocator.free(self._nesting);
+			}
 			allocator.destroy(self._arena);
-		}
-
-		pub fn reset(self: *Self) void {
-			self.field = null;
-			self._error_len = 0;
-			self._nesting_idx = null;
 		}
 
 		pub fn isValid(self: *Self) bool {
