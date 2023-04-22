@@ -13,6 +13,7 @@ pub fn build(b: *std.Build) !void {
 		.target = target,
 		.optimize = optimize,
 	});
+	lib_test.addIncludePath("lib/regez");
 	const run_test = b.addRunArtifact(lib_test);
 	run_test.has_side_effects = true;
 

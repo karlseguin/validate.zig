@@ -27,6 +27,7 @@ pub const InvalidDataType = enum {
 	fmin,
 	fmax,
 	choice,
+	pattern,
 };
 
 pub const InvalidData = union(InvalidDataType) {
@@ -35,6 +36,7 @@ pub const InvalidData = union(InvalidDataType) {
 	fmin: MinFloat,
 	fmax: MaxFloat,
 	choice: Choice,
+	pattern: Pattern,
 
 	pub const MinInt = struct {
 		min: i64
@@ -54,6 +56,10 @@ pub const InvalidData = union(InvalidDataType) {
 
 	pub const Choice = struct {
 		valid: [][]const u8,
+	};
+
+	pub const Pattern = struct {
+		pattern: []const u8,
 	};
 };
 

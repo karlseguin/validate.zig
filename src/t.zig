@@ -16,6 +16,7 @@ const InvalidExpectation = struct {
 	data_max: ?i64 = null,
 	data_fmin: ?f64 = null,
 	data_fmax: ?f64 = null,
+	data_pattern: ?[]const u8 = null,
 };
 
 pub fn reset(context: anytype) void {
@@ -85,6 +86,18 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 				continue;
 			}
 		}
+
+		if (e.data_pattern) |expected_pattern| {
+			if (invalid.data) |actual_data| {
+				switch (actual_data) {
+					.pattern => |p| if (!std.mem.eql(u8, p.pattern, expected_pattern)) continue,
+					else => continue,
+				}
+			} else {
+				continue;
+			}
+		}
+
 		return;
 	}
 	var arr = std.ArrayList(u8).init(allocator);

@@ -14,3 +14,4 @@ pub const FLOAT_MIN = 13;
 pub const FLOAT_MAX = 14;
 pub const ARRAY_LEN_MIN = 15;
 pub const ARRAY_LEN_MAX = 16;
+pub const STRING_PATTERN = 17;
