@@ -11,8 +11,8 @@ const Validator = @import("validator.zig").Validator;
 const json = std.json;
 const Allocator = std.mem.Allocator;
 
-const REGEX_T_SIZEOF = re.sizeof_regex_t();
-const REGEX_T_ALIGNOF = re.alignof_regex_t();
+const REGEX_T_SIZEOF = re.sizeof_regex_t;
+const REGEX_T_ALIGNOF = re.alignof_regex_t;
 
 const INVALID_TYPE = v.Invalid{
 	.code = codes.TYPE_STRING,
