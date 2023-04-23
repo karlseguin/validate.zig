@@ -194,7 +194,7 @@ test "string: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	{
@@ -215,7 +215,7 @@ test "string: type" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.string(.{});
@@ -227,7 +227,7 @@ test "string: min length" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.string(.{.min = 4});
@@ -259,7 +259,7 @@ test "string: max length" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.string(.{.max = 4});
@@ -292,7 +292,7 @@ test "string: choices" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	var choices = [_][]const u8{"one", "two", "three"};
@@ -314,7 +314,7 @@ test "string: function" {
 	var context = try Context(i64).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, 101);
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(i64).init(t.allocator);
+	var builder = try Builder(i64).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.string(.{.function = testStringValidator});
@@ -346,7 +346,7 @@ test "string: pattern" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.string(.{.pattern = "[ab]c"});

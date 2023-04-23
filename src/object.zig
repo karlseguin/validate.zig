@@ -145,7 +145,7 @@ test "object: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	{
@@ -166,7 +166,7 @@ test "object: type" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.object(&.{}, .{});
@@ -178,7 +178,7 @@ test "object: field" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const nameValidator = builder.string(.{.required = true, .min = 3});
@@ -195,7 +195,7 @@ test "object: nested" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 10, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const ageValidator = builder.int(.{.required = true});
@@ -235,7 +235,7 @@ test "object: change value" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const nameValidator = builder.string(.{.function = testObjectChangeValue});
