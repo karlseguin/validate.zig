@@ -68,19 +68,15 @@ pub fn Object(comptime S: type) type {
 			for (self.fields) |*field| {
 				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent_path, field.path});
 				if (parent_parts) |pp| {
-					if (field.parts) |parts| {
-						var new_parts = try allocator.alloc([]const u8, pp.len + parts.len);
-						for (pp, 0..) |p, i| {
-							new_parts[i] = p;
-						}
-						for (parts, 0..) |p, i| {
-							new_parts[pp.len + i] = p;
-						}
-						field.parts = new_parts;
+					const parts = field.parts orelse &([_][]const u8{field.name});
+					var new_parts = try allocator.alloc([]const u8, pp.len + parts.len);
+					for (pp, 0..) |p, i| {
+						new_parts[i] = p;
 					}
-					else {
-						field.parts = pp;
+					for (parts, 0..) |p, i| {
+						new_parts[pp.len + i] = p;
 					}
+					field.parts = new_parts;
 				}
 			}
 		}
