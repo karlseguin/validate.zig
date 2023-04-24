@@ -62,12 +62,12 @@ pub fn Int(comptime S: type) type {
 			};
 		}
 
-		pub fn validator(self: *const Self) Validator(S) {
+		pub fn validator(self: *Self) Validator(S) {
 			return Validator(S).init(self);
 		}
 
 		// part of the Validator interface, but noop for ints
-		pub fn nestField(_: *const Self, _: Allocator, _: *v.Field(S)) !void {}
+		pub fn nestField(_: *Self, _: Allocator, _: *v.Field(S)) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = input orelse {

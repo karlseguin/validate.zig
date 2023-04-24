@@ -145,7 +145,7 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
 
 	var buf = try allocator.alloc(u8, target_len - 1);
 
-	// what index we're at in indexes
+	// what index we're at in parts
 	var index: usize = 0;
 
 	// where we are in buf
@@ -162,12 +162,15 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
 	}
 
 	for (parts[1..]) |part| {
-		buf[pos] = '.';
-		pos += 1;
 		if (part.len == 0) {
+			if (index == indexes.len) break;
+			buf[pos] = '.';
+			pos += 1;
 			pos += std.fmt.formatIntBuf(buf[pos..], indexes[index], 10, .lower, .{});
 			index += 1;
 		} else {
+			buf[pos] = '.';
+			pos += 1;
 			std.mem.copy(u8, buf[pos..], part);
 			pos += part.len;
 		}

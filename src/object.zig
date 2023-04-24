@@ -51,54 +51,48 @@ pub fn Object(comptime S: type) type {
 			required: bool = false,
 		};
 
-		pub fn init(allocator: Allocator, fields: []const Field(S), config: Config) !Self {
-			var owned = try allocator.alloc(Field(S), fields.len);
-			for (@constCast(fields), 0..) |*field, i| {
-				try field.validator.nestField(allocator, field);
-				owned[i] = .{
-					.name = field.name,
-					.path = field.path,
-					.parts = field.parts,
-					.validator = field.validator,
-				};
-			}
-
+		pub fn init(_: Allocator, fields: []Field(S), config: Config) !Self {
 			return .{
-				.fields = owned,
+				.fields = fields,
 				.required = config.required,
 			};
 		}
 
-		pub fn validator(self: *const Self) Validator(S) {
+		pub fn validator(self: *Self) Validator(S) {
 			return Validator(S).init(self);
 		}
 
-		pub fn nestField(self: *const Self, allocator: Allocator, parent: *Field(S)) !void {
+		pub fn nestField(self: *Self, allocator: Allocator, parent: *Field(S)) !void {
 			const parent_path = parent.path;
+			const parent_parts = parent.parts;
 			for (self.fields) |*field| {
 				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent_path, field.path});
-				if (field.parts) |parts| {
-					const parent_parts = parent.parts.?;
-					var new_parts = try allocator.alloc([]const u8, parent_parts.len + parts.len);
-					for (parent_parts, 0..) |p, i| {
-						new_parts[i] = p;
+				if (parent_parts) |pp| {
+					if (field.parts) |parts| {
+						var new_parts = try allocator.alloc([]const u8, pp.len + parts.len);
+						for (pp, 0..) |p, i| {
+							new_parts[i] = p;
+						}
+						for (parts, 0..) |p, i| {
+							new_parts[pp.len + i] = p;
+						}
+						field.parts = new_parts;
 					}
-					for (parts, 0..) |p, i| {
-						new_parts[parent_parts.len + i] = p;
+					else {
+						field.parts = pp;
 					}
-					field.parts = new_parts;
 				}
 			}
 		}
 
-		pub fn validateJsonS(self: Self, data: []const u8, context: *Context(S)) !?Typed {
+		pub fn validateJsonS(self: *Self, data: []const u8, context: *Context(S)) !?Typed {
 			const allocator = context.allocator; // an arena allocator
 			var parser = std.json.Parser.init(allocator, false);
 			var tree = try parser.parse(data);
 			return self.validateJsonV(tree.root, context);
 		}
 
-		pub fn validateJsonV(self: Self, root: ?json.Value, context: *Context(S)) !?Typed {
+		pub fn validateJsonV(self: *Self, root: ?json.Value, context: *Context(S)) !?Typed {
 			if (try self.validateJsonValue(root, context)) |value| {
 				return .{.root = value.Object};
 			}
@@ -183,7 +177,7 @@ test "object: field" {
 
 	const nameValidator = builder.string(.{.required = true, .min = 3});
 	const objectValidator = builder.object(&.{
-		builder.field("name", &nameValidator),
+		builder.field("name", nameValidator),
 	}, .{});
 
 	_ = try objectValidator.validateJsonS("{}", &context);
@@ -203,12 +197,12 @@ test "object: nested" {
 	const scoreValidator = builder.float(.{.required = true});
 	const enabledValidator = builder.boolean(.{.required = true});
 	const userValidator = builder.object(&.{
-		builder.field("age", &ageValidator),
-		builder.field("name", &nameValidator),
-		builder.field("score", &scoreValidator),
-		builder.field("enabled", &enabledValidator),
+		builder.field("age", ageValidator),
+		builder.field("name", nameValidator),
+		builder.field("score", scoreValidator),
+		builder.field("enabled", enabledValidator),
 	}, .{.required = true});
-	const dataValidator = builder.object(&.{builder.field("user", &userValidator)}, .{});
+	const dataValidator = builder.object(&.{builder.field("user", userValidator)}, .{});
 
 	{
 		_ = try dataValidator.validateJsonS("{}", &context);
@@ -240,7 +234,7 @@ test "object: change value" {
 
 	const nameValidator = builder.string(.{.function = testObjectChangeValue});
 	const objectValidator = builder.object(&.{
-		builder.field("name", &nameValidator),
+		builder.field("name", nameValidator),
 	}, .{});
 
 	{

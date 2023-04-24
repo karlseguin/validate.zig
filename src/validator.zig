@@ -8,9 +8,9 @@ const Allocator = std.mem.Allocator;
 
 pub fn Validator(comptime S: type) type {
 	return struct {
-		ptr: *const anyopaque,
-		validateFn: *const fn(*const anyopaque, value: ?json.Value, context: *Context(S)) anyerror!?json.Value,
-		nestFieldFn: *const fn(*const anyopaque, allocator: Allocator, parent: *Field(S)) anyerror!void,
+		ptr: *anyopaque,
+		validateFn: *const fn(*anyopaque, value: ?json.Value, context: *Context(S)) anyerror!?json.Value,
+		nestFieldFn: *const fn(*anyopaque, allocator: Allocator, parent: *Field(S)) anyerror!void,
 
 		pub fn init(ptr: anytype) Validator(S) {
 			const Ptr = @TypeOf(ptr);
@@ -22,11 +22,11 @@ pub fn Validator(comptime S: type) type {
 			const alignment = ptr_info.Pointer.alignment;
 
 			const gen = struct {
-				pub fn validateImpl(pointer: *const anyopaque, value: ?json.Value, context: *Context(S)) !?json.Value {
+				pub fn validateImpl(pointer: *anyopaque, value: ?json.Value, context: *Context(S)) !?json.Value {
 					const self = @ptrCast(Ptr, @alignCast(alignment, pointer));
 					return @call(.always_inline, ptr_info.Pointer.child.validateJsonValue, .{self, value, context});
 				}
-				pub fn nestFieldImpl(pointer: *const anyopaque, allocator: Allocator, parent: *Field(S)) !void {
+				pub fn nestFieldImpl(pointer: *anyopaque, allocator: Allocator, parent: *Field(S)) !void {
 					const self = @ptrCast(Ptr, @alignCast(alignment, pointer));
 					return @call(.always_inline, ptr_info.Pointer.child.nestField, .{self, allocator, parent});
 				}

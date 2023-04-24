@@ -24,7 +24,7 @@ pub fn String(comptime S: type) type {
 		required: bool,
 		min: ?usize,
 		max: ?usize,
-		choices: ?[][]const u8 = null,
+		choices: ?[]const []const u8 = null,
 		function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8,
 		invalid_min: ?v.Invalid,
 		invalid_max: ?v.Invalid,
@@ -38,7 +38,7 @@ pub fn String(comptime S: type) type {
 			min: ?usize = null,
 			max: ?usize = null,
 			required: bool = false,
-			choices: ?[][]const u8 = null,
+			choices: ?[]const []const u8 = null,
 			pattern: ?[]const u8 = null,
 			function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8 = null,
 		};
@@ -99,12 +99,12 @@ pub fn String(comptime S: type) type {
 			};
 		}
 
-		pub fn validator(self: *const Self) Validator(S) {
+		pub fn validator(self: *Self) Validator(S) {
 			return Validator(S).init(self);
 		}
 
 		// part of the Validator interface, but noop for strings
-		pub fn nestField(_: *const Self, _: Allocator, _: *v.Field(S)) !void {}
+		pub fn nestField(_: *Self, _: Allocator, _: *v.Field(S)) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = input orelse {
@@ -295,7 +295,7 @@ test "string: choices" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	var choices = [_][]const u8{"one", "two", "three"};
+	const choices = [_][]const u8{"one", "two", "three"};
 	const validator = builder.string(.{.choices = &choices});
 
 	{

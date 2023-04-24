@@ -55,7 +55,7 @@ pub const InvalidData = union(InvalidDataType) {
 	};
 
 	pub const Choice = struct {
-		valid: [][]const u8,
+		valid: []const []const u8,
 	};
 
 	pub const Pattern = struct {

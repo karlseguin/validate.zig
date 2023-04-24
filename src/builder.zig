@@ -55,49 +55,73 @@ pub fn Builder(comptime S: type) type {
 			allocator.destroy(self.arena);
 		}
 
-		pub fn tryInt(self: Self, config: Int(S).Config) !Int(S) {
-			return Int(S).init(self.allocator, config);
+		pub fn tryInt(self: Self, config: Int(S).Config) !*Int(S) {
+			const val = try self.allocator.create(Int(S));
+			val.* = try Int(S).init(self.allocator, config);
+			return val;
 		}
-		pub fn int(self: Self, config: Int(S).Config) Int(S) {
+		pub fn int(self: Self, config: Int(S).Config) *Int(S) {
 			return self.tryInt(config) catch unreachable;
 		}
 
-		pub fn tryBoolean(self: Self, config: Bool(S).Config) !Bool(S) {
-			return Bool(S).init(self.allocator, config);
+		pub fn tryBoolean(self: Self, config: Bool(S).Config) !*Bool(S) {
+			const val = try self.allocator.create(Bool(S));
+			val.* = try Bool(S).init(self.allocator, config);
+			return val;
 		}
-		pub fn boolean(self: Self, config: Bool(S).Config) Bool(S) {
+		pub fn boolean(self: Self, config: Bool(S).Config) *Bool(S) {
 			return self.tryBoolean(config) catch unreachable;
 		}
 
-		pub fn tryFloat(self: Self, config: Float(S).Config) !Float(S) {
-			return Float(S).init(self.allocator, config);
+		pub fn tryFloat(self: Self, config: Float(S).Config) !*Float(S) {
+			const val = try self.allocator.create(Float(S));
+			val.* = try Float(S).init(self.allocator, config);
+			return val;
 		}
-		pub fn float(self: Self, config: Float(S).Config) Float(S) {
+		pub fn float(self: Self, config: Float(S).Config) *Float(S) {
 			return self.tryFloat(config) catch unreachable;
 		}
 
-		pub fn tryString(self: *Self, config: String(S).Config) !String(S) {
-			const s = try String(S).init(self.allocator, config);
-			if (s.regex) |regex| {
+		pub fn tryString(self: *Self, config: String(S).Config) !*String(S) {
+			const val = try self.allocator.create(String(S));
+			val.* = try String(S).init(self.allocator, config);
+
+			if (val.regex) |regex| {
 				try self.regexes.append(regex);
 			}
-			return s;
+			return val;
 		}
-		pub fn string(self: *Self, config: String(S).Config) String(S) {
+		pub fn string(self: *Self, config: String(S).Config) *String(S) {
 			return self.tryString(config) catch unreachable;
 		}
 
-		pub fn tryArray(self: Self, validator: anytype, config: Array(S).Config) !Array(S) {
-			return Array(S).init(self.allocator, validator, config);
+		pub fn tryArray(self: Self, validator: anytype, config: Array(S).Config) !*Array(S) {
+			const val = try self.allocator.create(Array(S));
+			val.* = try Array(S).init(self.allocator, validator, config);
+			return val;
 		}
-		pub fn array(self: Self, validator: anytype, config: Array(S).Config) Array(S) {
+		pub fn array(self: Self, validator: anytype, config: Array(S).Config) *Array(S) {
 			return self.tryArray(validator, config) catch unreachable;
 		}
 
-		pub fn tryObject(self: Self, fields: []const Field(S), config: Object(S).Config) !Object(S) {
-			return Object(S).init(self.allocator, fields, config);
+		pub fn tryObject(self: Self, fields: []const Field(S), config: Object(S).Config) !*Object(S) {
+			const allocator = self.allocator;
+			var owned = try allocator.alloc(Field(S), fields.len);
+			for (@constCast(fields), 0..) |*f, i| {
+				try f.validator.nestField(allocator, f);
+				owned[i] = .{
+					.name = f.name,
+					.path = f.path,
+					.parts = f.parts,
+					.validator = f.validator,
+				};
+			}
+
+			const val = try self.allocator.create(Object(S));
+			val.* = try Object(S).init(self.allocator, owned, config);
+			return val;
 		}
-		pub fn object(self: Self, fields: []const Field(S), config: Object(S).Config) Object(S) {
+		pub fn object(self: Self, fields: []const Field(S), config: Object(S).Config) *Object(S) {
 			return self.tryObject(fields, config) catch unreachable;
 		}
 

@@ -69,11 +69,11 @@ pub fn Array(comptime S: type) type {
 			};
 		}
 
-		pub fn validator(self: *const Self) Validator(S) {
+		pub fn validator(self: *Self) Validator(S) {
 			return Validator(S).init(self);
 		}
 
-		pub fn nestField(self: *const Self, allocator: Allocator, parent: *v.Field(S)) !void {
+		pub fn nestField(self: *Self, allocator: Allocator, parent: *v.Field(S)) !void {
 			const path = parent.path;
 			// The first time this validator is added to an object, we create the parts
 			// On subsequent nesting, we don't need to do anything (the Object validator
@@ -184,7 +184,7 @@ test "array: min length" {
 
 	const arrayValidator = builder.array(null, .{.min = 2});
 	const objectValidator = builder.object(&.{
-		builder.field("items", &arrayValidator),
+		builder.field("items", arrayValidator),
 	}, .{});
 
 	{
@@ -214,7 +214,7 @@ test "array: max length" {
 
 	const arrayValidator = builder.array(null, .{.max = 3});
 	const objectValidator = builder.object(&.{
-		builder.field("items", &arrayValidator),
+		builder.field("items", arrayValidator),
 	}, .{});
 
 	{
@@ -243,9 +243,9 @@ test "array: nested" {
 	defer builder.deinit(t.allocator);
 
 	const itemValidator = builder.int(.{.min = 4});
-	const arrayValidator = builder.array(&itemValidator, .{});
+	const arrayValidator = builder.array(itemValidator, .{});
 	const objectValidator = builder.object(&.{
-		builder.field("items", &arrayValidator),
+		builder.field("items", arrayValidator),
 	}, .{});
 
 	{
@@ -263,15 +263,21 @@ test "array: deeplys nested field name" {
 	defer builder.deinit(t.allocator);
 
 	const favValidator = builder.int(.{.min = 4});
-	const favArrayValidator = builder.array(&favValidator, .{});
-	const itemValidator = builder.object(&.{builder.field("fav", &favArrayValidator)}, .{});
-	const itemsArrayValidator = builder.array(&itemValidator, .{});
-	const objectValidator = builder.object(&.{builder.field("items", &itemsArrayValidator)}, .{});
+	const favArrayValidator = builder.array(favValidator, .{.required = true});
+	const itemValidator = builder.object(&.{builder.field("fav", favArrayValidator)}, .{});
+	const itemsArrayValidator = builder.array(itemValidator, .{});
+	const objectValidator = builder.object(&.{builder.field("items", itemsArrayValidator)}, .{});
 
 	{
 		_ = try objectValidator.validateJsonS("{\"items\": [{\"fav\": [1,2]}]}", &context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.1"}, context);
+	}
+
+	{
+		t.reset(&context);
+		_ = try objectValidator.validateJsonS("{\"items\": [{}]}", &context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "items.0.fav"}, context);
 	}
 }
 
@@ -283,9 +289,9 @@ test "array: change value" {
 	defer builder.deinit(t.allocator);
 
 	const itemValidator = builder.int(.{.function = testArrayChangeValue});
-	const arrayValidator = builder.array(&itemValidator, .{});
+	const arrayValidator = builder.array(itemValidator, .{});
 	const objectValidator = builder.object(&.{
-		builder.field("items", &arrayValidator),
+		builder.field("items", arrayValidator),
 	}, .{});
 
 	{
