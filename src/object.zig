@@ -189,10 +189,12 @@ test "object: nested" {
 	defer builder.deinit(t.allocator);
 
 	const ageValidator = builder.int(.{.required = true});
+	const anyValidator = builder.any(.{.required = true});
 	const nameValidator = builder.string(.{.required = true});
 	const scoreValidator = builder.float(.{.required = true});
 	const enabledValidator = builder.boolean(.{.required = true});
 	const userValidator = builder.object(&.{
+		builder.field("any", anyValidator),
 		builder.field("age", ageValidator),
 		builder.field("name", nameValidator),
 		builder.field("score", scoreValidator),
@@ -214,6 +216,7 @@ test "object: nested" {
 	{
 		t.reset(&context);
 		_ = try dataValidator.validateJsonS("{\"user\": {}}", &context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.any"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.name"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.score"}, context);

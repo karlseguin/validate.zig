@@ -6,6 +6,7 @@ const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
 const Int = @import("int.zig").Int;
+const Any = @import("any.zig").Any;
 const Bool = @import("bool.zig").Bool;
 const Float = @import("float.zig").Float;
 const Array = @import("array.zig").Array;
@@ -53,6 +54,15 @@ pub fn Builder(comptime S: type) type {
 
 			self.arena.deinit();
 			allocator.destroy(self.arena);
+		}
+
+		pub fn tryAny(self: Self, config: Any(S).Config) !*Any(S) {
+			const val = try self.allocator.create(Any(S));
+			val.* = try Any(S).init(self.allocator, config);
+			return val;
+		}
+		pub fn any(self: Self, config: Any(S).Config) *Any(S) {
+			return self.tryAny(config) catch unreachable;
 		}
 
 		pub fn tryInt(self: Self, config: Int(S).Config) !*Int(S) {
