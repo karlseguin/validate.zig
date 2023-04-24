@@ -69,6 +69,16 @@ pub fn Float(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
+		pub fn trySetRequired(self: *Self, req: bool, builder: Builder(S)) !*Float(S) {
+			var clone = try builder.allocator.create(Float(S));
+			clone.* = self.*;
+			clone.required = req;
+			return clone;
+		}
+		pub fn setRequired(self: *Self, req: bool, builder: Builder(S)) *Float(S) {
+			return self.trySetRequired(req, builder) catch unreachable;
+		}
+
 		// part of the Validator interface, but noop for floats
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field(S)) !void {}
 
@@ -132,13 +142,22 @@ test "float: required" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
+	const notRequired = builder.float(.{.required = false, });
+	const required = notRequired.setRequired(true, builder);
+
 	{
-		const validator = builder.float(.{.required = true});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
+		t.reset(&context);
+		try t.expectEqual(nullJson, try notRequired.validateJsonValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
 		const validator = builder.float(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));

@@ -38,6 +38,16 @@ pub fn Bool(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
+		pub fn trySetRequired(self: *Self, req: bool, builder: Builder(S)) !*Bool(S) {
+			var clone = try builder.allocator.create(Bool(S));
+			clone.* = self.*;
+			clone.required = req;
+			return clone;
+		}
+		pub fn setRequired(self: *Self, req: bool, builder: Builder(S)) *Bool(S) {
+			return self.trySetRequired(req, builder) catch unreachable;
+		}
+
 		// part of the Validator interface, but noop for bools
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field(S)) !void {}
 
@@ -78,14 +88,22 @@ test "bool: required" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
+	const notRequired = builder.boolean(.{.required = false, });
+	const required = notRequired.setRequired(true, builder);
+
 	{
-		const validator = builder.boolean(.{.required = true});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
+		t.reset(&context);
+		try t.expectEqual(nullJson, try notRequired.validateJsonValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
 
+	{
+		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
 		const validator = builder.boolean(.{.required = false});
 		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
