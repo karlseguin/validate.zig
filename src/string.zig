@@ -103,13 +103,13 @@ pub fn String(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn trySetRequired(self: *Self, req: bool, builder: Builder(S)) !*String(S) {
+		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*String(S) {
 			var clone = try builder.allocator.create(String(S));
 			clone.* = self.*;
 			clone.required = req;
 			return clone;
 		}
-		pub fn setRequired(self: *Self, req: bool, builder: Builder(S)) *String(S) {
+		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *String(S) {
 			return self.trySetRequired(req, builder) catch unreachable;
 		}
 
@@ -208,7 +208,7 @@ test "string: required" {
 	defer builder.deinit(t.allocator);
 
 	const notRequired = builder.string(.{.required = false, });
-	const required = notRequired.setRequired(true, builder);
+	const required = notRequired.setRequired(true, &builder);
 
 	{
 		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));

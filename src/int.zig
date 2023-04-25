@@ -66,13 +66,13 @@ pub fn Int(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn trySetRequired(self: *Self, req: bool, builder: Builder(S)) !*Int(S) {
+		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*Int(S) {
 			var clone = try builder.allocator.create(Int(S));
 			clone.* = self.*;
 			clone.required = req;
 			return clone;
 		}
-		pub fn setRequired(self: *Self, req: bool, builder: Builder(S)) *Int(S) {
+		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *Int(S) {
 			return self.trySetRequired(req, builder) catch unreachable;
 		}
 
@@ -129,11 +129,11 @@ test "int: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const notRequired = builder.int(.{.required = false, });
-	const required = notRequired.setRequired(true, builder);
+	const required = notRequired.setRequired(true, &builder);
 
 	{
 		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));

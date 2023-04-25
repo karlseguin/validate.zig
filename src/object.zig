@@ -44,16 +44,20 @@ pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
 		fields: []Field(S),
+		function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap,
 
 		const Self = @This();
 
 		pub const Config = struct {
 			required: bool = false,
+			nest: ?[]const []const u8 = null,
+			function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap = null,
 		};
 
 		pub fn init(_: Allocator, fields: []Field(S), config: Config) !Self {
 			return .{
 				.fields = fields,
+				.function = config.function,
 				.required = config.required,
 			};
 		}
@@ -92,7 +96,13 @@ pub fn Object(comptime S: type) type {
 			if (try self.validateJsonValue(root, context)) |value| {
 				return .{.root = value.Object};
 			}
-			return null;
+			if (root) |r| {
+				switch (r) {
+					.Object => |o| return Typed.wrap(o),
+					else => return Typed.empty,
+				}
+			}
+			return Typed.empty;
 		}
 
 		pub fn validateJsonValue(self: *const Self, optional_value: ?json.Value, context: *Context(S)) !?json.Value {
@@ -100,7 +110,7 @@ pub fn Object(comptime S: type) type {
 				if (self.required) {
 					try context.add(v.required);
 				}
-				return null;
+				return self.executeFunction(null, context);
 			};
 
 			var value = switch (untyped_value) {
@@ -111,6 +121,7 @@ pub fn Object(comptime S: type) type {
 				},
 			};
 
+			context.object = Typed.wrap(value);
 			for (self.fields) |f| {
 				context.field = f;
 				const name = f.name;
@@ -125,7 +136,15 @@ pub fn Object(comptime S: type) type {
 				}
 			}
 
-			return .{.Object = value};
+			return self.executeFunction(value, context);
+		}
+
+		fn executeFunction(self: *const Self, value: ?json.ObjectMap, context: *Context(S)) !?json.Value {
+			if (self.function) |f| {
+				const transformed = try f(value, context) orelse return null;
+				return json.Value{.Object = transformed};
+			}
+			return null;
 		}
 	};
 }
@@ -224,6 +243,24 @@ test "object: nested" {
 	}
 }
 
+test "object: forced nesting" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 10, .max_nesting = 2}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const ageValidator = builder.int(.{.required = true});
+	const userValidator = builder.object(&.{
+		builder.field("age", ageValidator),
+	}, .{.nest = &[_][]const u8{"user"}});
+
+	{
+		_ = try userValidator.validateJsonS("{}", &context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
+	}
+}
+
 test "object: change value" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
@@ -237,19 +274,21 @@ test "object: change value" {
 	}, .{});
 
 	{
-		const typed = try objectValidator.validateJsonS("{\"name\": \"normal\"}", &context) orelse unreachable;
+		const typed = try objectValidator.validateJsonS("{\"name\": \"normal\", \"c\": 33}", &context) orelse unreachable;
 		try t.expectEqual(true, context.isValid());
 		try t.expectString("normal", typed.string("name").?);
 	}
 
 	{
-		const typed = try objectValidator.validateJsonS("{\"name\": \"!\"}", &context) orelse unreachable;
+		const typed = try objectValidator.validateJsonS("{\"name\": \"!\", \"c\":33}", &context) orelse unreachable;
 		try t.expectEqual(true, context.isValid());
 		try t.expectString("abc", typed.string("name").?);
 	}
 }
 
-fn testObjectChangeValue(value: ?[]const u8, _: *Context(void)) !?[]const u8 {
+fn testObjectChangeValue(value: ?[]const u8, ctx: *Context(void)) !?[]const u8 {
+	std.debug.assert(ctx.object.int("c").? == 33);
+
 	if (value.?[0] == '!') {
 		return "abc";
 	}

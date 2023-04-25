@@ -35,13 +35,13 @@ pub fn Any(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn trySetRequired(self: *Self, req: bool, builder: Builder(S)) !*Any(S) {
+		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*Any(S) {
 			var clone = try builder.allocator.create(Any(S));
 			clone.* = self.*;
 			clone.required = req;
 			return clone;
 		}
-		pub fn setRequired(self: *Self, req: bool, builder: Builder(S)) *Any(S) {
+		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *Any(S) {
 			return self.trySetRequired(req, builder) catch unreachable;
 		}
 
@@ -72,11 +72,11 @@ test "any: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
 	const notRequired = builder.any(.{.required = false, });
-	const required = notRequired.setRequired(true, builder);
+	const required = notRequired.setRequired(true, &builder);
 
 	{
 		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));

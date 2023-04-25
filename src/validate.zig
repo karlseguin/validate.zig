@@ -7,6 +7,7 @@ pub const Field = @import("object.zig").Field;
 pub const Builder = @import("builder.zig").Builder;
 pub const Context = @import("context.zig").Context;
 
+pub const Any = @import("any.zig").Any;
 pub const Int = @import("int.zig").Int;
 pub const Bool = @import("bool.zig").Bool;
 pub const Float = @import("float.zig").Float;

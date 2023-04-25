@@ -39,7 +39,6 @@ pub fn Builder(comptime S: type) type {
 			arena.* = ArenaAllocator.init(allocator);
 			errdefer arena.deinit();
 
-
 			return .{
 				.arena = arena,
 				.allocator = arena.allocator(),
@@ -117,6 +116,7 @@ pub fn Builder(comptime S: type) type {
 		pub fn tryObject(self: Self, fields: []const Field(S), config: Object(S).Config) !*Object(S) {
 			const allocator = self.allocator;
 			var owned = try allocator.alloc(Field(S), fields.len);
+
 			for (@constCast(fields), 0..) |*f, i| {
 				try f.validator.nestField(allocator, f);
 				owned[i] = .{
@@ -129,6 +129,12 @@ pub fn Builder(comptime S: type) type {
 
 			const val = try self.allocator.create(Object(S));
 			val.* = try Object(S).init(self.allocator, owned, config);
+
+			if (config.nest) |nest| {
+				var forced_parent = try self.buildFieldForNesting(nest);
+				try val.nestField(allocator, &forced_parent);
+			}
+
 			return val;
 		}
 		pub fn object(self: Self, fields: []const Field(S), config: Object(S).Config) *Object(S) {
@@ -146,5 +152,25 @@ pub fn Builder(comptime S: type) type {
 				.validator = validator.validator(),
 			};
 		}
+
+		fn buildFieldForNesting(self: Self, parts: []const []const u8) !Field(S) {
+			if (parts.len == 1) {
+				return .{
+					.path = parts[0],
+					.name = parts[0],
+					.parts = null,
+					.validator = undefined,
+				};
+			}
+			const allocator = self.allocator;
+			_ = allocator;
+			return .{
+				.name = "",
+				.path = "",
+				.validator = undefined,
+				.parts = @constCast(parts),
+			};
+		}
 	};
 }
+

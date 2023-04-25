@@ -11,6 +11,8 @@ pub const Typed = struct {
 		return .{.root = root};
 	}
 
+	pub const empty = Typed{.root = json.ObjectMap.init(undefined)};
+
 	pub fn count(self: Typed) usize {
 		return self.root.count();
 	}
