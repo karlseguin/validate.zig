@@ -65,11 +65,19 @@ pub fn String(comptime S: type) type {
 			}
 
 			var invalid_choices: ?v.Invalid = null;
+			var owned_choices: ?[][]const u8 = null;
 			if (config.choices) |choices| {
-				const choice_list = try std.mem.join(allocator, ", ", choices);
+				var owned = try allocator.alloc([]u8, choices.len);
+				for (choices, 0..) |choice, i| {
+					owned[i] = try allocator.alloc(u8, choice.len);
+					std.mem.copy(u8, owned[i], choice);
+				}
+				owned_choices = owned;
+
+				const choice_list = try std.mem.join(allocator, ", ", owned);
 				invalid_choices = v.Invalid{
 					.code = codes.STRING_CHOICE,
-					.data = .{.choice = .{.valid = choices}},
+					.data = .{.choice = .{.valid = owned}},
 					.err = try std.fmt.allocPrint(allocator, "must be one of: {s}", .{choice_list}),
 				};
 			}
@@ -89,7 +97,7 @@ pub fn String(comptime S: type) type {
 				.regex = regex,
 				.min = config.min,
 				.max = config.max,
-				.choices = config.choices,
+				.choices = owned_choices,
 				.required = config.required,
 				.function = config.function,
 				.invalid_min = invalid_min,
@@ -327,6 +335,34 @@ test "string: choices" {
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = choice}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
+
+	var validator2: *String(void) = undefined;
+	{
+		var c1 = try t.allocator.alloc(u8, 5);
+		std.mem.copy(u8, c1, "hello");
+
+		var c2 = try t.allocator.alloc(u8, 3);
+		std.mem.copy(u8, c2, "you");
+
+		var choices2 = try t.allocator.alloc([]u8, 2);
+		choices2[0] = c1;
+		choices2[1] = c2;
+
+		validator2 = builder.string(.{.choices = choices2});
+		defer t.allocator.free(c1);
+		defer t.allocator.free(c2);
+		defer t.allocator.free(choices2);
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullJson, try validator2.validateJsonValue(.{.String = "nope"}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_CHOICE}, context);
+	}
+
+	t.reset(&context);
+	try t.expectEqual(nullJson, try validator2.validateJsonValue(.{.String = "hello"}, &context));
+	try t.expectEqual(true, context.isValid());
 }
 
 test "string: function" {
