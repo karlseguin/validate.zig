@@ -74,7 +74,61 @@ pub const Typed = struct {
 		}
 		return null;
 	}
+
+	pub fn intIterator(self: Typed, field: []const u8) Iterator(i64) {
+		return Iterator(i64).init(self.array(field));
+	}
+
+	pub fn floatIterator(self: Typed, field: []const u8) Iterator(f64) {
+		return Iterator(f64).init(self.array(field));
+	}
+
+	pub fn stringIterator(self: Typed, field: []const u8) Iterator([]const u8) {
+		return Iterator([]const u8).init(self.array(field));
+	}
+
+	pub fn booleanIterator(self: Typed, field: []const u8) Iterator(bool) {
+		return Iterator(bool).init(self.array(field));
+	}
+
+	pub fn objectIterator(self: Typed, field: []const u8) Iterator(Typed) {
+		return Iterator(Typed).init(self.array(field));
+	}
 };
+
+pub fn Iterator(comptime T: type) type {
+	return struct {
+		pos: usize = 0,
+		max_len: usize,
+		array: ?json.Array,
+
+		const Self = @This();
+
+		const mapper = switch (T) {
+			Typed => M.object,
+			i64 => M.int,
+			f64 => M.float,
+			[]const u8 => M.string,
+			bool => M.boolean,
+			else => unreachable,
+		};
+
+		fn init(arr: ?json.Array) Self {
+			return .{
+				.array = arr,
+				.max_len = if (arr) |a| a.items.len else 0,
+			};
+		}
+
+		pub fn next(self: *Self) ?T {
+			const arr = self.array orelse return null;
+			const pos = self.pos;
+			if (pos == self.max_len) return null;
+			self.pos = pos + 1;
+			return mapper(arr.items[pos]);
+		}
+	};
+}
 
 pub fn boolean(value: json.Value) ?bool {
 	switch (value) {
@@ -179,6 +233,28 @@ test "typed: int array" {
 	try t.expectEqual(@as(?i64, null), int(values.items[3]));
 }
 
+
+test "typed: intIterator" {
+	const tc = testJson(\\
+	\\{
+	\\ "values": [1, 2, 3, true]
+	\\}
+	);
+	defer tc.deinit();
+	const typed = tc.typed;
+
+	var it = typed.intIterator("values");
+	try t.expectEqual(@as(usize, 4), it.max_len);
+	try t.expectEqual(@as(i64, 1), it.next().?);
+	try t.expectEqual(@as(i64, 2), it.next().?);
+	try t.expectEqual(@as(i64, 3), it.next().?);
+	try t.expectEqual(@as(?i64, null), it.next());
+	try t.expectEqual(@as(?i64, null), it.next());
+
+	it = typed.intIterator("nope");
+	try t.expectEqual(@as(?i64, null), it.next());
+}
+
 test "typed: float array" {
 	const tc = testJson(\\
 	\\{
@@ -194,6 +270,27 @@ test "typed: float array" {
 	try t.expectEqual(@as(f64, 2.2), float(values.items[1]).?);
 	try t.expectEqual(@as(f64, 3.3), float(values.items[2]).?);
 	try t.expectEqual(@as(?f64, null), float(values.items[3]));
+}
+
+test "typed: floatIterator" {
+	const tc = testJson(\\
+	\\{
+	\\ "values": [1.1, 2.2, 3.3, "a"]
+	\\}
+	);
+	defer tc.deinit();
+	const typed = tc.typed;
+
+	var it = typed.floatIterator("values");
+	try t.expectEqual(@as(usize, 4), it.max_len);
+	try t.expectEqual(@as(f64, 1.1), it.next().?);
+	try t.expectEqual(@as(f64, 2.2), it.next().?);
+	try t.expectEqual(@as(f64, 3.3), it.next().?);
+	try t.expectEqual(@as(?f64, null), it.next());
+	try t.expectEqual(@as(?f64, null), it.next());
+
+	it = typed.floatIterator("nope");
+	try t.expectEqual(@as(?f64, null), it.next());
 }
 
 test "typed: bool array" {
@@ -213,6 +310,27 @@ test "typed: bool array" {
 	try t.expectEqual(@as(?bool, null), boolean(values.items[3]));
 }
 
+test "typed: booleanIterator" {
+	const tc = testJson(\\
+	\\{
+	\\ "values": [true, false, true, 12]
+	\\}
+	);
+	defer tc.deinit();
+	const typed = tc.typed;
+
+	var it = typed.booleanIterator("values");
+	try t.expectEqual(@as(usize, 4), it.max_len);
+	try t.expectEqual(true, it.next().?);
+	try t.expectEqual(false, it.next().?);
+	try t.expectEqual(true, it.next().?);
+	try t.expectEqual(@as(?bool, null), it.next());
+	try t.expectEqual(@as(?bool, null), it.next());
+
+	it = typed.booleanIterator("nope");
+	try t.expectEqual(@as(?bool, null), it.next());
+}
+
 test "typed: string array" {
 	const tc = testJson(\\
 	\\{
@@ -230,6 +348,27 @@ test "typed: string array" {
 	try t.expectEqual(@as(?[]const u8, null), string(values.items[3]));
 }
 
+test "typed: stringIterator" {
+	const tc = testJson(\\
+	\\{
+	\\ "values": ["abc", "123", "tea", 1]
+	\\}
+	);
+	defer tc.deinit();
+	const typed = tc.typed;
+
+	var it = typed.stringIterator("values");
+	try t.expectEqual(@as(usize, 4), it.max_len);
+	try t.expectString("abc", it.next().?);
+	try t.expectString("123", it.next().?);
+	try t.expectString("tea", it.next().?);
+	try t.expectEqual(@as(?[]const u8, null), it.next());
+	try t.expectEqual(@as(?[]const u8, null), it.next());
+
+	it = typed.stringIterator("nope");
+	try t.expectEqual(@as(?[]const u8, null), it.next());
+}
+
 test "typed: object array" {
 	const tc = testJson(\\
 	\\{
@@ -245,6 +384,27 @@ test "typed: object array" {
 	try t.expectEqual(@as(i64, 2), object(values.items[1]).?.int("over").?);
 	try t.expectEqual(@as(i64, 3), object(values.items[2]).?.int("over").?);
 	try t.expectEqual(@as(?Typed, null), object(values.items[3]));
+}
+
+test "typed: objectIterator" {
+	const tc = testJson(\\
+	\\{
+	\\ "values": [{"over":1}, {"over":2}, {"over":3}, 33]
+	\\}
+	);
+	defer tc.deinit();
+	const typed = tc.typed;
+
+	var it = typed.objectIterator("values");
+	try t.expectEqual(@as(usize, 4), it.max_len);
+	try t.expectEqual(@as(i64, 1), it.next().?.int("over").?);
+	try t.expectEqual(@as(i64, 2), it.next().?.int("over").?);
+	try t.expectEqual(@as(i64, 3), it.next().?.int("over").?);
+	try t.expectEqual(@as(?Typed, null), it.next());
+	try t.expectEqual(@as(?Typed, null), it.next());
+
+	it = typed.objectIterator("nope");
+	try t.expectEqual(@as(?Typed, null), it.next());
 }
 
 const TestContainer = struct {
