@@ -44,19 +44,31 @@ pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
 		fields: []Field(S),
+		field_lookup: ?std.StringHashMap(void),
 		function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap,
 
 		const Self = @This();
 
 		pub const Config = struct {
 			required: bool = false,
+			remove_unknown: bool = false,
 			nest: ?[]const []const u8 = null,
 			function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap = null,
 		};
 
-		pub fn init(_: Allocator, fields: []Field(S), config: Config) !Self {
+		pub fn init(allocator: Allocator, fields: []Field(S), config: Config) !Self {
+			var field_lookup: ?std.StringHashMap(void) = null;
+			if (config.remove_unknown) {
+				var lookup = std.StringHashMap(void).init(allocator);
+				try lookup.ensureTotalCapacity(@intCast(u32, fields.len));
+				for (fields) |f| {
+					try lookup.put(f.name, {});
+				}
+				field_lookup = lookup;
+			}
 			return .{
 				.fields = fields,
+				.field_lookup = field_lookup,
 				.function = config.function,
 				.required = config.required,
 			};
@@ -136,7 +148,25 @@ pub fn Object(comptime S: type) type {
 				}
 			}
 
-			return self.executeFunction(value, context);
+			const result = try self.executeFunction(value, context);
+			if (self.field_lookup) |fl| {
+				var map = if (result) |r| r.Object else value;
+				var i: usize = 0;
+				const keys = map.keys();
+				var number_of_keys = keys.len;
+				while (i < number_of_keys) {
+					var key = keys[i];
+					if (fl.contains(key)) {
+						i += 1;
+						continue;
+					}
+					map.swapRemoveAt(i);
+					number_of_keys -= 1;
+				}
+				return .{.Object = map};
+			} else {
+				return result;
+			}
 		}
 
 		fn executeFunction(self: *const Self, value: ?json.ObjectMap, context: *Context(S)) !?json.Value {
@@ -284,6 +314,25 @@ test "object: change value" {
 		try t.expectEqual(true, context.isValid());
 		try t.expectString("abc", typed.string("name").?);
 	}
+}
+
+test "object: remove_unknown" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const objectValidator = builder.object(&.{
+		builder.field("id", builder.int(.{})),
+		builder.field("name", builder.string(.{.min = 4})),
+	}, .{.remove_unknown = true});
+
+	const out = try objectValidator.validateJsonS("{\"f\": 32.2, \"id\":4, \"name\": \"ab\", \"other\": true}", &context);
+	const keys = out.?.root.keys();
+	try t.expectEqual(@as(usize, 2), keys.len);
+	try t.expectString("name", keys[0]);
+	try t.expectString("id", keys[1]);
 }
 
 fn testObjectChangeValue(value: ?[]const u8, ctx: *Context(void)) !?[]const u8 {
