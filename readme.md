@@ -56,18 +56,20 @@ var context = try validate.Context(void).init(allocator, .{.max_errors = 10, .ma
 defer context.deinit();
 
 const jsonData = "{\"year\": \"nope\", \"score\": 94.3, \"tags\": [\"scifi\"]}";
-var movie = movieValidator.validateJson(jsonData, &context);
-if (!context.isValid()) {
-    // use context.errors() to get an array of errors, which you can serialize to json:
-
-    var arr = std.ArrayList(u8).init(t.allocator);
-    defer arr.deinit();
-    try std.json.stringify(context.errors(), .{.emit_null_optional_fields = false}, arr.writer());
-    std.debug.print("{s}", .{arr.items});
-    return;
+switch (movieValidator.validateJsonS(jsonData, &context)) {
+    .ok => {},
+    .err => |err| return err,
+    .json => // TODO: json was not valid
+    .invalid => |invalid| {
+        var arr = std.ArrayList(u8).init(t.allocator);
+        defer arr.deinit();
+        try std.json.stringify(invalid.errors, .{.emit_null_optional_fields = false}, arr.writer());
+        std.debug.print("{s}", .{arr.items});
+        return;
+    }
 }
 
-// the validateJson function on an objectValidator returns a thin wrapper around std.json.Value
+// On success, validateJsonS returns a thin wrapper around std.json.Value
 // which lets us get values:
 
 const title = movie.string("title").?
@@ -105,7 +107,7 @@ When validating, this library attempts to minimize memory allocations as much as
 ## State
 While this library has common validation rules for things like string length, min and max values, array size, etc., it also accepts custom validation functions. Sometimes these functions are simple and stateless. In other cases it can be desirable to have some application-specific data. For example, in a multi-tenancy application, data validation might depend on tenant-specific configuration.
 
-The `Builder` and `Context` types explored above are actually generic functions which return a `Builder(T)` and `Context(T)`. When the `validateJson` function is called, a `state T` is provided, which is then passed to custom validation functions:
+The `Builder` and `Context` types explored above are actually generic functions which return a `Builder(T)` and `Context(T)`. When the `validateJsonS` function is called, a `state T` is provided, which is then passed to custom validation functions:
 
 ```zig
 // Our builder will build validators that expect a `*Custom` instance
@@ -142,7 +144,7 @@ Some errors also have a `data` object. Whether or not an error has a `data` obje
 Between the `code`, `data` and `field` fields, developers should be able to programmatically consume and customize the errors.
 
 ## Typed
-Validation of data happens by calling `validateJson` on an `object` validator. This function returns a `validate.Typed` instance which is a thin wrapper around `std.json.Value`.
+Validation of data happens by calling `validateJsonS` on an `object` validator. This function returns a `validate.Typed` instance which is a thin wrapper around `std.json.Value`.
 
 The goal of `validate.Typed` is to provide a user-friendly API to extract the input data safely.
 

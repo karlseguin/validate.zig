@@ -8,17 +8,10 @@ const Field = @import("object.zig").Field;
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
-const InvalidField = struct {
-	field: ?[]const u8,
-	code: i64,
-	err: []const u8,
-	data: ?v.InvalidData,
-};
-
 pub fn Context(comptime S: type) type {
 	return struct {
 		_error_len: u16,
-		_errors: []InvalidField,
+		_errors: []v.InvalidField,
 		_arena: *ArenaAllocator,
 		_nesting: []usize,
 		_nesting_idx: ?u8,
@@ -54,7 +47,7 @@ pub fn Context(comptime S: type) type {
 			// If the context is not created for the Pool, we can optimize the
 			// code a little and use our arena allocator for _errors and _nesting.
 			const persistent_allocator = if (from_pool) allocator else aa;
-			const _errors = try persistent_allocator.alloc(InvalidField, config.max_errors);
+			const _errors = try persistent_allocator.alloc(v.InvalidField, config.max_errors);
 			const _nesting = try persistent_allocator.alloc(usize, config.max_nesting);
 
 			return .{
@@ -86,7 +79,7 @@ pub fn Context(comptime S: type) type {
 			return self._error_len == 0;
 		}
 
-		pub fn errors(self: Self) []InvalidField {
+		pub fn errors(self: Self) []v.InvalidField {
 			return self._errors[0..self._error_len];
 		}
 
@@ -105,7 +98,7 @@ pub fn Context(comptime S: type) type {
 				}
 			}
 
-			_errors[len] = InvalidField{
+			_errors[len] = v.InvalidField{
 				.code = invalid.code,
 				.field = field_path,
 				.err = invalid.err,

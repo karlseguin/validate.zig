@@ -22,6 +22,13 @@ pub const Invalid = struct {
 	data: ?InvalidData = null,
 };
 
+pub const InvalidField = struct {
+	field: ?[]const u8,
+	code: i64,
+	err: []const u8,
+	data: ?InvalidData,
+};
+
 pub const InvalidDataType = enum {
 	imin,
 	imax,

@@ -188,19 +188,19 @@ test "array: min length" {
 	}, .{});
 
 	{
-		_ = try objectValidator.validateJsonS("{\"items\": []}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": []}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MIN}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJsonS("{\"items\": [1]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [1]}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MIN}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -218,19 +218,19 @@ test "array: max length" {
 	}, .{});
 
 	{
-		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 3, 4]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [1, 2, 3, 4]}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MAX}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 3]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [1, 2, 3]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -249,7 +249,7 @@ test "array: nested" {
 	}, .{});
 
 	{
-		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 5]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [1, 2, 5]}", &context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.1"}, context);
 	}
@@ -269,14 +269,14 @@ test "array: deeplys nested field name" {
 	const objectValidator = builder.object(&.{builder.field("items", itemsArrayValidator)}, .{});
 
 	{
-		_ = try objectValidator.validateJsonS("{\"items\": [{\"fav\": [1,2]}]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [{\"fav\": [1,2]}]}", &context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.1"}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = try objectValidator.validateJsonS("{\"items\": [{}]}", &context);
+		_ = objectValidator.validateJsonS("{\"items\": [{}]}", &context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "items.0.fav"}, context);
 	}
 }
@@ -295,7 +295,7 @@ test "array: change value" {
 	}, .{});
 
 	{
-		const typed = (try objectValidator.validateJsonS("{\"items\": [1, 2, -5]}", &context)).?;
+		const typed = objectValidator.validateJsonS("{\"items\": [1, 2, -5]}", &context).ok;
 		try t.expectEqual(true, context.isValid());
 		const items = typed.array("items").?.items;
 		try t.expectEqual(@as(i64, -1), items[0].Integer);
