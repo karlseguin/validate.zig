@@ -36,6 +36,7 @@ pub const InvalidDataType = enum {
 	fmax,
 	choice,
 	pattern,
+	details,
 };
 
 pub const InvalidData = union(InvalidDataType) {
@@ -45,6 +46,7 @@ pub const InvalidData = union(InvalidDataType) {
 	fmax: MaxFloat,
 	choice: Choice,
 	pattern: Pattern,
+	details: Details, // generic string to be used by applications
 
 	pub const MinInt = struct {
 		min: i64
@@ -68,6 +70,10 @@ pub const InvalidData = union(InvalidDataType) {
 
 	pub const Pattern = struct {
 		pattern: []const u8,
+	};
+
+	pub const Details = struct {
+		details: []const u8,
 	};
 };
 

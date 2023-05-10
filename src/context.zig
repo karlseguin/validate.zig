@@ -84,11 +84,6 @@ pub fn Context(comptime S: type) type {
 		}
 
 		pub fn add(self: *Self, invalid: v.Invalid) !void {
-			const len = self._error_len;
-			const _errors = self._errors;
-
-			if (len == _errors.len) return;
-
 			var field_path: ?[]const u8 = null;
 			if (self.field) |f| {
 				if (self._nesting_idx) |ni| {
@@ -98,12 +93,19 @@ pub fn Context(comptime S: type) type {
 				}
 			}
 
-			_errors[len] = v.InvalidField{
+			self.addInvalidField(v.InvalidField{
 				.code = invalid.code,
 				.field = field_path,
 				.err = invalid.err,
 				.data = invalid.data,
-			};
+			});
+		}
+
+		pub fn addInvalidField(self: *Self, err: v.InvalidField) void {
+			const len = self._error_len;
+			const _errors = self._errors;
+			if (len == _errors.len) return;
+			_errors[len] = err;
 			self._error_len = len + 1;
 		}
 
