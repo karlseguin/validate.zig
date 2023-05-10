@@ -1,5 +1,4 @@
 const std = @import("std");
-const codes = @import("codes.zig");
 
 pub const Pool = @import("pool.zig").Pool;
 pub const Config = @import("pool.zig").Config;
@@ -15,6 +14,8 @@ pub const Array = @import("array.zig").Array;
 pub const Typed = @import("typed.zig").Typed;
 pub const String = @import("string.zig").String;
 pub const Object = @import("object.zig").Object;
+pub const codes = @import("codes.zig");
+pub const testing = @import("testing.zig");
 
 pub const Invalid = struct {
 	code: i64,
