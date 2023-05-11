@@ -38,6 +38,7 @@ pub const InvalidDataType = enum {
 	choice,
 	pattern,
 	details,
+	generic,
 };
 
 pub const InvalidData = union(InvalidDataType) {
@@ -48,6 +49,7 @@ pub const InvalidData = union(InvalidDataType) {
 	choice: Choice,
 	pattern: Pattern,
 	details: Details, // generic string to be used by applications
+	generic: std.json.Value, // generic, anything that std.json.ObjectMap can represent
 
 	pub const MinInt = struct {
 		min: i64

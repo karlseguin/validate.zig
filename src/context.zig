@@ -129,8 +129,76 @@ pub fn Context(comptime S: type) type {
 		pub fn arrayIndex(self: *Self, idx: usize) void {
 			self._nesting[self._nesting_idx.?] = idx;
 		}
+
+		pub fn genericData(self: Self) GenericDataBuilder {
+			return GenericDataBuilder.init(self.allocator);
+		}
 	};
 }
+
+pub const GenericDataBuilder = struct {
+	inner: *Inner,
+
+	// We do this so that we can mutate the values using a fluent interface.
+	// Calling ctx.genericData returns a const (tmp values are always const in zig)
+	// so we can't mutate it directly.
+	const Inner = struct {
+		// we defer reporting any error building our ObjectMap until done() is called
+		err: ?anyerror,
+		root: std.json.ObjectMap,
+
+		fn put(self: *Inner, key: []const u8, value: std.json.Value) void {
+			self.root.put(key, value) catch |err| {
+				self.err = err;
+			};
+		}
+	};
+
+	const Self = @This();
+
+	// we expect allocator to be an ArenaAllocator which is managed by someone else!
+	pub fn init(allocator: Allocator) Self {
+		const inner = allocator.create(Inner) catch unreachable;
+		inner.* = Inner{
+			.err = null,
+			.root = std.json.ObjectMap.init(allocator),
+		};
+		return .{.inner = inner};
+	}
+
+	pub fn nul(self: Self, key: [:0]const u8) Self {
+		self.inner.put(key, .{.Null = {}});
+		return self;
+	}
+
+	pub fn boolean(self: Self, key: [:0]const u8, value: bool) Self {
+		self.inner.put(key,.{.Bool = value});
+		return self;
+	}
+
+	pub fn int(self: Self, key: [:0]const u8, value: i64) Self {
+		self.inner.put(key,.{.Integer = value});
+		return self;
+	}
+
+	pub fn float(self: Self, key: [:0]const u8, value: f64) Self {
+		self.inner.put(key,.{.Float = value});
+		return self;
+	}
+
+	pub fn string(self: Self, key: [:0]const u8, value: []const u8) Self {
+		self.inner.put(key,.{.String = value});
+		return self;
+	}
+
+	pub fn done(self: Self) !v.InvalidData {
+		const inner = self.inner;
+		if (inner.err) |err| {
+			return err;
+		}
+		return .{.generic = .{.Object = inner.root}};
+	}
+};
 
 fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) ![]const u8{
 	var target_len: usize = 0;
@@ -219,4 +287,26 @@ test "intLength" {
 	try t.expectEqual(@as(usize, 4), intLength(9999));
 	try t.expectEqual(@as(usize, 5), intLength(10000));
 	try t.expectEqual(@as(usize, 5), intLength(10002));
+}
+
+test "context: addInvalidField with generic data" {
+	var ctx = try Context(void).init(t.allocator, .{}, {});
+	defer ctx.deinit(t.allocator);
+
+	ctx.addInvalidField(v.InvalidField{
+		.field = "f1",
+		.code = 9101,
+		.err = "nope, cannot",
+		.data = try ctx.genericData().
+			nul("d1").
+			boolean("d2", true).
+			int("d3", 3).
+			float("d4", -2.3).
+			string("d5", "9000").done(),
+	});
+
+	var arr = std.ArrayList(u8).init(t.allocator);
+	defer arr.deinit();
+	try std.json.stringify(ctx.errors(), .{.emit_null_optional_fields = false}, arr.writer());
+	try t.expectString("[{\"field\":\"f1\",\"code\":9101,\"err\":\"nope, cannot\",\"data\":{\"d1\":null,\"d2\":true,\"d3\":3,\"d4\":-2.3e+00,\"d5\":\"9000\"}}]", arr.items);
 }
