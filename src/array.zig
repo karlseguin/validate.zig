@@ -24,6 +24,7 @@ pub fn Array(comptime S: type) type {
 		invalid_min: ?v.Invalid,
 		invalid_max: ?v.Invalid,
 		_validator: ?Validator(S),
+		function: ?*const fn(value: ?json.Array, context: *Context(S)) anyerror!?json.Array,
 
 		const Self = @This();
 
@@ -31,6 +32,7 @@ pub fn Array(comptime S: type) type {
 			required: bool = false,
 			min: ?usize = null,
 			max: ?usize = null,
+			function: ?*const fn(value: ?json.Array, context: *Context(S)) anyerror!?json.Array = null,
 		};
 
 		pub fn init(allocator: Allocator, item_validator: anytype, config: Config) !Self {
@@ -65,6 +67,7 @@ pub fn Array(comptime S: type) type {
 				.required = config.required,
 				.invalid_min = invalid_min,
 				.invalid_max = invalid_max,
+				.function = config.function,
 				._validator = val,
 			};
 		}
@@ -96,7 +99,7 @@ pub fn Array(comptime S: type) type {
 				if (self.required) {
 					try context.add(v.required);
 				}
-				return null;
+				return self.executeFunction(null, context);
 			};
 
 			var value = switch (untyped_value) {
@@ -135,7 +138,14 @@ pub fn Array(comptime S: type) type {
 					}
 				}
 			}
+			return self.executeFunction(value, context);
+		}
 
+		fn executeFunction(self: *const Self, value: ?json.Array, context: *Context(S)) !?json.Value {
+			if (self.function) |f| {
+				const transformed = try f(value, context) orelse return null;
+				return json.Value{.Array = transformed};
+			}
 			return null;
 		}
 	};
@@ -304,7 +314,46 @@ test "array: change value" {
 	}
 }
 
+test "array: function" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const arrayValidator = builder.array(null, .{.function = testArrayValidator});
+	const objectValidator = builder.object(&.{
+		builder.field("items", arrayValidator),
+	}, .{});
+
+	{
+		const typed = objectValidator.validateJsonS("{\"items\": [2]}", &context).ok;
+		try t.expectEqual(true, context.isValid());
+		const items = typed.array("items").?.items;
+		try t.expectEqual(@as(i64, 9001), items[0].Integer);
+	}
+
+	{
+		const typed = objectValidator.validateJsonS("{\"items\": [2, 3]}", &context).ok;
+		try t.expectEqual(true, context.isValid());
+		const items = typed.array("items").?.items;
+		try t.expectEqual(@as(i64, 2), items[0].Integer);
+		try t.expectEqual(@as(i64, 3), items[1].Integer);
+	}
+}
+
 fn testArrayChangeValue(value: ?i64, _: *Context(void)) !?i64 {
 	if (value.? == 1) return -1;
+	return null;
+}
+
+fn testArrayValidator(value: ?json.Array, _: *Context(void)) !?json.Array {
+	const n = value orelse unreachable;
+
+	if (n.items.len == 1) {
+		n.items[0] = .{.Integer = 9001};
+		return n;
+	}
+
 	return null;
 }

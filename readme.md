@@ -154,7 +154,7 @@ Most validators accept a custom function. This custom function will only be call
 The signature of these functions is:
 
 ```zig
-*const fn(value: ?T, context: Context(S)) !?T
+*const fn(value: ?T, context: *Context(S)) !?T
 ```
 
 For an integer validator, `T` is `i64`. For a float validator, `T` is `f64` and so on.
@@ -308,6 +308,10 @@ const names_validator = builder.array(name_validator, .{
 
     // the maximum length(inclusive of max), null == no limit
     .max = null, // usize
+
+    // a custom validation function that will receive the value to validate
+    // along with a validation.Context.
+    .function = ?*const fn(value: ?json.Array, context: *Context(S)) anyerror!?json.Array = null,
 });
 ```
 
@@ -350,6 +354,20 @@ const input = switch (user_validator.validateJsonS("...", context)) {
         // errors can be serialized to JSON
     }
 }
+```
+
+### Dynamic Required
+Oftentimes you'll need validators which only differ in their `required` configuration. For example, an HTTP API might require a `name` on create, but leave the name as `optional` on update.
+
+For `int`, `float`, `bool`, `string` and `any` validators, `setRequired(bool, builder)` can be called to clone the original validator with the specified `required`.
+
+For example, our above `user_validator` uses a non-required `name_validator`. We could change this to required by doing:
+
+```zig
+var user_validator = builder.object(name_validator, &.{
+    builder.field("age", age_validator),
+    builder.field("name", name_validator.setRequired(true, builder)),
+}, .{});
 ```
 
 ## Context
