@@ -322,18 +322,29 @@ test "string: choices" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const choices = [_][]const u8{"one", "two", "three"};
-	const validator = builder.string(.{.choices = &choices});
+	const validator = builder.string(.{.choices = &.{"one", "two", "three"}});
 
 	{
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "nope"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_CHOICE}, context);
-	}
 
-	for (choices) |choice| {
-		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = choice}, &context));
-		try t.expectEqual(true, context.isValid());
+
+		{
+			t.reset(&context);
+			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "two"}, &context));
+			try t.expectEqual(true, context.isValid());
+		}
+		{
+			t.reset(&context);
+			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "three"}, &context));
+			try t.expectEqual(true, context.isValid());
+		}
+
+		{
+			t.reset(&context);
+			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "one"}, &context));
+			try t.expectEqual(true, context.isValid());
+		}
 	}
 
 	var validator2: *String(void) = undefined;
