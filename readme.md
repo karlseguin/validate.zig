@@ -272,6 +272,24 @@ In rare cases (e.g. OOM) `builder.string` can panic. `builder.tryString` functio
 
 Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
 
+### UUID Validator
+A UUID validator is created via the `builder.uuid` function. This function takes a configuration structure. The full possible configuration, with default values, is show below:
+
+```zig
+const name_validator = builder.string(.{
+    // whether the value is required or not
+    .required = false,
+
+    // a custom validation function that will receive the value to validate
+    // along with a validation.Context.
+    function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8 = null,
+});
+```
+
+In rare cases (e.g. OOM) `builder.uuid` can panic. `builder.tryUuid` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
+
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+
 ### Any Validator
 A type-less validator is created via `builder.any` function. Unlike all other validators, this validator does not validate the type of the value. This validator is useful when the type of a field is only known at runtime and a custom validation function is used.
 

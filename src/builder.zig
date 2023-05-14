@@ -8,6 +8,7 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 const Int = @import("int.zig").Int;
 const Any = @import("any.zig").Any;
 const Bool = @import("bool.zig").Bool;
+const UUID = @import("uuid.zig").UUID;
 const Float = @import("float.zig").Float;
 const Array = @import("array.zig").Array;
 const String = @import("string.zig").String;
@@ -102,6 +103,15 @@ pub fn Builder(comptime S: type) type {
 		}
 		pub fn string(self: *Self, config: String(S).Config) *String(S) {
 			return self.tryString(config) catch unreachable;
+		}
+
+		pub fn tryUuid(self: *Self, config: UUID(S).Config) !*UUID(S) {
+			const val = try self.allocator.create(UUID(S));
+			val.* = try UUID(S).init(self.allocator, config);
+			return val;
+		}
+		pub fn uuid(self: *Self, config: UUID(S).Config) *UUID(S) {
+			return self.tryUuid(config) catch unreachable;
 		}
 
 		pub fn tryArray(self: Self, validator: anytype, config: Array(S).Config) !*Array(S) {

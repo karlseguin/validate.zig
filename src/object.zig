@@ -218,9 +218,9 @@ test "object: invalidJson" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const objectValidator = builder.object(&.{}, .{});
+	const object_validator = builder.object(&.{}, .{});
 
-	switch (objectValidator.validateJsonS("{a", &context)) {
+	switch (object_validator.validateJsonS("{a", &context)) {
 		.json => {},
 		else => unreachable,
 	}
@@ -266,12 +266,12 @@ test "object: field" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const nameValidator = builder.string(.{.required = true, .min = 3});
-	const objectValidator = builder.object(&.{
-		builder.field("name", nameValidator),
+	const name_validator = builder.string(.{.required = true, .min = 3});
+	const object_validator = builder.object(&.{
+		builder.field("name", name_validator),
 	}, .{});
 
-	const errors = objectValidator.validateJsonS("{}", &context).invalid.errors;
+	const errors = object_validator.validateJsonS("{}", &context).invalid.errors;
 	try t.expectInvalidErrors(.{.code = codes.REQUIRED, .field = "name"}, errors);
 }
 
@@ -282,19 +282,21 @@ test "object: nested" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const ageValidator = builder.int(.{.required = true});
-	const anyValidator = builder.any(.{.required = true});
-	const nameValidator = builder.string(.{.required = true});
-	const scoreValidator = builder.float(.{.required = true});
-	const enabledValidator = builder.boolean(.{.required = true});
-	const userValidator = builder.object(&.{
-		builder.field("any", anyValidator),
-		builder.field("age", ageValidator),
-		builder.field("name", nameValidator),
-		builder.field("score", scoreValidator),
-		builder.field("enabled", enabledValidator),
+	const id_validator = builder.uuid(.{.required = true});
+	const age_validator = builder.int(.{.required = true});
+	const any_validator = builder.any(.{.required = true});
+	const name_validator = builder.string(.{.required = true});
+	const score_validator = builder.float(.{.required = true});
+	const enabled_validator = builder.boolean(.{.required = true});
+	const user_validator = builder.object(&.{
+		builder.field("id", id_validator),
+		builder.field("any", any_validator),
+		builder.field("age", age_validator),
+		builder.field("name", name_validator),
+		builder.field("score", score_validator),
+		builder.field("enabled", enabled_validator),
 	}, .{.required = true});
-	const dataValidator = builder.object(&.{builder.field("user", userValidator)}, .{});
+	const dataValidator = builder.object(&.{builder.field("user", user_validator)}, .{});
 
 	{
 		const errors = dataValidator.validateJsonS("{}", &context).invalid.errors;
@@ -310,6 +312,7 @@ test "object: nested" {
 	{
 		t.reset(&context);
 		_ = dataValidator.validateJsonS("{\"user\": {}}", &context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.id"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.any"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.name"}, context);
@@ -325,13 +328,13 @@ test "object: forced nesting" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const ageValidator = builder.int(.{.required = true});
-	const userValidator = builder.object(&.{
-		builder.field("age", ageValidator),
+	const age_validator = builder.int(.{.required = true});
+	const user_validator = builder.object(&.{
+		builder.field("age", age_validator),
 	}, .{.nest = &[_][]const u8{"user"}});
 
 	{
-		_ = userValidator.validateJsonS("{}", &context);
+		_ = user_validator.validateJsonS("{}", &context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 	}
 }
@@ -343,19 +346,19 @@ test "object: change value" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const nameValidator = builder.string(.{.function = testObjectChangeValue});
-	const objectValidator = builder.object(&.{
-		builder.field("name", nameValidator),
+	const name_validator = builder.string(.{.function = testObjectChangeValue});
+	const object_validator = builder.object(&.{
+		builder.field("name", name_validator),
 	}, .{});
 
 	{
-		const typed = objectValidator.validateJsonS("{\"name\": \"normal\", \"c\": 33}", &context).ok;
+		const typed = object_validator.validateJsonS("{\"name\": \"normal\", \"c\": 33}", &context).ok;
 		try t.expectEqual(true, context.isValid());
 		try t.expectString("normal", typed.string("name").?);
 	}
 
 	{
-		const typed = objectValidator.validateJsonS("{\"name\": \"!\", \"c\":33}", &context).ok;
+		const typed = object_validator.validateJsonS("{\"name\": \"!\", \"c\":33}", &context).ok;
 		try t.expectEqual(true, context.isValid());
 		try t.expectString("abc", typed.string("name").?);
 	}
@@ -368,12 +371,12 @@ test "object: remove_unknown" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const objectValidator = builder.object(&.{
+	const object_validator = builder.object(&.{
 		builder.field("id", builder.int(.{})),
 		builder.field("name", builder.string(.{.min = 4})),
 	}, .{.remove_unknown = true});
 
-	const out = objectValidator.validateJsonS("{\"f\": 32.2, \"id\":4, \"name\": \"abcd\", \"other\": true}", &context).ok;
+	const out = object_validator.validateJsonS("{\"f\": 32.2, \"id\":4, \"name\": \"abcd\", \"other\": true}", &context).ok;
 	const keys = out.root.keys();
 	try t.expectEqual(@as(usize, 2), keys.len);
 	try t.expectString("name", keys[0]);
