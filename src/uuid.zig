@@ -87,14 +87,14 @@ pub fn UUID(comptime S: type) type {
 		}
 
 		// part of the Validator interface, but noop for UUID
-		pub fn nestField(_: *Self, _: Allocator, _: *v.Field(S)) !void {}
+		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = input orelse {
 				if (self.required) {
 					try context.add(v.required);
 				}
-				return self.executeFunction(null, context);
+				return asJsonValue(try self.executeFunction(null, context));
 			};
 
 			const value = switch (untyped_value) {
@@ -105,6 +105,20 @@ pub fn UUID(comptime S: type) type {
 				}
 			};
 
+			return asJsonValue(try self.validateNonNullString(value, context));
+		}
+
+		pub fn validateString(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
+			const value = optional_value orelse {
+				if (self.required) {
+					try context.add(v.required);
+				}
+				return null;
+			};
+			return self.validateNonNullString(value, context);
+		}
+
+		pub fn validateNonNullString(self: *const Self, value: []const u8, context: *Context(S)) !?[]const u8 {
 			if (value.len != 36 or value[8] != '-' or value[13] != '-' or value[18] != '-' or value[23] != '-') {
 				try context.add(INVALID_TYPE);
 				return null;
@@ -120,15 +134,18 @@ pub fn UUID(comptime S: type) type {
 					return null;
 				}
 			}
-
 			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?[]const u8, context: *Context(S)) !?json.Value {
+		fn executeFunction(self: *const Self, value: ?[]const u8, context: *Context(S)) !?[]const u8 {
 			if (self.function) |f| {
-				const transformed = try f(value, context) orelse return null;
-				return json.Value{.String = transformed};
+				return f(value, context);
 			}
+			return null;
+		}
+
+		fn asJsonValue(optional_value: ?[]const u8) ?json.Value {
+			if (optional_value) |value| return .{.String = value};
 			return null;
 		}
 	};
@@ -209,7 +226,6 @@ test "UUID: uuid" {
 		try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 	}
 
-
 	{
 		const invalids = [_][]const u8{
 			"00000000-0000-0000-0000-00000000000",   // TOO SHORT
@@ -227,7 +243,6 @@ test "UUID: uuid" {
 			try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 		}
 	}
-
 }
 
 test "UUID: function" {

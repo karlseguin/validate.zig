@@ -18,7 +18,7 @@ pub fn Context(comptime S: type) type {
 		_from_pool: bool,
 		state: S,
 		object: Typed,
-		field: ?Field(S),
+		field: ?Field,
 		allocator: Allocator,
 
 		const Self = @This();
@@ -132,6 +132,11 @@ pub fn Context(comptime S: type) type {
 
 		pub fn genericData(self: Self) GenericDataBuilder {
 			return GenericDataBuilder.init(self.allocator);
+		}
+
+		pub fn validateStringField(self: *Self, field: Field, validator: anytype, value: ?[]const u8) !?[]const u8 {
+			self.field = field;
+			return validator.validateString(value, self);
 		}
 	};
 }
@@ -309,4 +314,28 @@ test "context: addInvalidField with generic data" {
 	defer arr.deinit();
 	try std.json.stringify(ctx.errors(), .{.emit_null_optional_fields = false}, arr.writer());
 	try t.expectString("[{\"field\":\"f1\",\"code\":9101,\"err\":\"nope, cannot\",\"data\":{\"d1\":null,\"d2\":true,\"d3\":3,\"d4\":-2.3e+00,\"d5\":\"9000\"}}]", arr.items);
+}
+
+test "context: validateStringField" {
+	var builder = try v.Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	var ctx = try Context(void).init(t.allocator, .{}, {});
+	defer ctx.deinit(t.allocator);
+
+	const id_field = v.simpleField("id");
+	const id_validator = builder.uuid(.{});
+
+	{
+		// invalid
+		_ = try ctx.validateStringField(id_field, id_validator, "123");
+		try t.expectInvalid(.{.code = v.codes.TYPE_UUID, .field = "id"}, ctx);
+	}
+
+	{
+		// valid
+		t.reset(&ctx);
+		_ = try ctx.validateStringField(id_field, id_validator, "e88081b4-a592-470d-939a-172fa438c3dd");
+		try t.expectEqual(true, ctx.isValid());
+	}
 }

@@ -88,6 +88,14 @@ pub const required = Invalid{
 
 pub const empty = Typed{.root = std.json.ObjectMap.init(undefined)};
 
+pub fn simpleField(name: []const u8) Field {
+	return .{
+		.path = name,
+		.name = name,
+		.parts = null,
+	};
+}
+
 test {
 	std.testing.refAllDecls(@This());
 }

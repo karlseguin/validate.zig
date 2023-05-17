@@ -80,7 +80,7 @@ pub fn Float(comptime S: type) type {
 		}
 
 		// part of the Validator interface, but noop for floats
-		pub fn nestField(_: *Self, _: Allocator, _: *v.Field(S)) !void {}
+		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
 		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = input orelse {

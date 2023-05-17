@@ -17,25 +17,28 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be an object",
 };
 
-pub fn Field(comptime S: type) type {
+pub const Field = struct {
+	// This is the name of the field in the object. Used when we get the value
+	// out of the map
+	name: []const u8,
+
+	// This is the full path of the field, including nesting. If we forget about
+	// arrays for a second, field.name is always the suffix of field.path. So if
+	// path == "result.user.id", then name == "id". This is what we use when
+	// generating the field name in the error (we want to display the full path)
+	path: []const u8,
+
+	// The individual parts of the path. Necessary for arrays which require a
+	// dynamically generated path. Essentially, you can imagine a path that's
+	// like: "users.#.favorite.#" would have the following parts:
+	// ["user", "", "favorite", ""]
+	// Only needed when our field is nested under an array, null otherwise
+	parts: ?[][]const u8 = null,
+};
+
+pub fn FieldValidator(comptime S: type) type {
 	return struct {
-		// This is the name of the field in the object. Used when we get the value
-		// out of the map
-		name: []const u8,
-
-		// This is the full path of the field, including nesting. If we forget about
-		// arrays for a second, field.name is always the suffix of field.path. So if
-		// path == "result.user.id", then name == "id". This is what we use when
-		// generating the field name in the error (we want to display the full path)
-		path: []const u8,
-
-		// The individual parts of the path. Necessary for arrays which require a
-		// dynamically generated path. Essentially, you can imagine a path that's
-		// like: "users.#.favorite.#" would have the following parts:
-		// ["user", "", "favorite", ""]
-		// Only needed when our field is nested under an array, null otherwise
-		parts: ?[][]const u8 = null,
-
+		field: Field,
 		validator: Validator(S),
 	};
 }
@@ -43,7 +46,7 @@ pub fn Field(comptime S: type) type {
 pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
-		fields: []Field(S),
+		fields: []FieldValidator(S),
 		field_lookup: ?std.StringHashMap(void),
 		function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap,
 
@@ -56,13 +59,13 @@ pub fn Object(comptime S: type) type {
 			function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap = null,
 		};
 
-		pub fn init(allocator: Allocator, fields: []Field(S), config: Config) !Self {
+		pub fn init(allocator: Allocator, fields: []FieldValidator(S), config: Config) !Self {
 			var field_lookup: ?std.StringHashMap(void) = null;
 			if (config.remove_unknown) {
 				var lookup = std.StringHashMap(void).init(allocator);
 				try lookup.ensureTotalCapacity(@intCast(u32, fields.len));
-				for (fields) |f| {
-					try lookup.put(f.name, {});
+				for (fields) |fv| {
+					try lookup.put(fv.field.name, {});
 				}
 				field_lookup = lookup;
 			}
@@ -78,10 +81,11 @@ pub fn Object(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn nestField(self: *Self, allocator: Allocator, parent: *Field(S)) !void {
+		pub fn nestField(self: *Self, allocator: Allocator, parent: *Field) !void {
 			const parent_path = parent.path;
 			const parent_parts = parent.parts;
-			for (self.fields) |*field| {
+			for (self.fields) |*fv| {
+				var field = &fv.field;
 				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent_path, field.path});
 				if (parent_parts) |pp| {
 					const parts = field.parts orelse &([_][]const u8{field.name});
@@ -146,15 +150,16 @@ pub fn Object(comptime S: type) type {
 			};
 
 			context.object = Typed.wrap(value);
-			for (self.fields) |f| {
+			for (self.fields) |fv| {
+				const f = fv.field;
 				context.field = f;
 				const name = f.name;
 				if (value.getEntry(name)) |entry| {
-					if (try f.validator.validateJsonValue(entry.value_ptr.*, context)) |new_field_value| {
+					if (try fv.validator.validateJsonValue(entry.value_ptr.*, context)) |new_field_value| {
 						entry.value_ptr.* = new_field_value;
 					}
 				} else {
-					if (try f.validator.validateJsonValue(null, context)) |new_field_value| {
+					if (try fv.validator.validateJsonValue(null, context)) |new_field_value| {
 						try value.put(name, new_field_value);
 					}
 				}

@@ -76,7 +76,7 @@ pub fn Array(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn nestField(self: *Self, allocator: Allocator, parent: *v.Field(S)) !void {
+		pub fn nestField(self: *Self, allocator: Allocator, parent: *v.Field) !void {
 			const path = parent.path;
 			// The first time this validator is added to an object, we create the parts
 			// On subsequent nesting, we don't need to do anything (the Object validator

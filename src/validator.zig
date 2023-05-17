@@ -10,7 +10,7 @@ pub fn Validator(comptime S: type) type {
 	return struct {
 		ptr: *anyopaque,
 		validateFn: *const fn(*anyopaque, value: ?json.Value, context: *Context(S)) anyerror!?json.Value,
-		nestFieldFn: *const fn(*anyopaque, allocator: Allocator, parent: *Field(S)) anyerror!void,
+		nestFieldFn: *const fn(*anyopaque, allocator: Allocator, parent: *Field) anyerror!void,
 
 		pub fn init(ptr: anytype) Validator(S) {
 			const Ptr = @TypeOf(ptr);
@@ -26,7 +26,7 @@ pub fn Validator(comptime S: type) type {
 					const self = @ptrCast(Ptr, @alignCast(alignment, pointer));
 					return @call(.always_inline, ptr_info.Pointer.child.validateJsonValue, .{self, value, context});
 				}
-				pub fn nestFieldImpl(pointer: *anyopaque, allocator: Allocator, parent: *Field(S)) !void {
+				pub fn nestFieldImpl(pointer: *anyopaque, allocator: Allocator, parent: *Field) !void {
 					const self = @ptrCast(Ptr, @alignCast(alignment, pointer));
 					return @call(.always_inline, ptr_info.Pointer.child.nestField, .{self, allocator, parent});
 				}
@@ -43,7 +43,7 @@ pub fn Validator(comptime S: type) type {
 			return self.validateFn(self.ptr, value, context);
 		}
 
-		pub inline fn nestField(self: Validator(S), allocator: Allocator, parent: *Field(S)) !void {
+		pub inline fn nestField(self: Validator(S), allocator: Allocator, parent: *Field) !void {
 			return self.nestFieldFn(self.ptr, allocator, parent);
 		}
 	};

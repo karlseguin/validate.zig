@@ -46,7 +46,7 @@ pub fn Any(comptime S: type) type {
 		}
 
 		// part of the Validator interface, but noop for any
-		pub fn nestField(_: *Self, _: Allocator, _: *v.Field(S)) !void {}
+		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
 		pub fn validateJsonValue(self: *const Self, optional_value: ?json.Value, context: *Context(S)) !?json.Value {
 			const untyped_value = optional_value orelse {

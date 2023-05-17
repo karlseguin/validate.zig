@@ -15,6 +15,7 @@ const String = @import("string.zig").String;
 const Validator = @import("validator.zig").Validator;
 const Field = object.Field;
 const Object = object.Object;
+const FieldValidator = object.FieldValidator;
 
 pub fn Builder(comptime S: type) type {
 	return struct {
@@ -123,17 +124,15 @@ pub fn Builder(comptime S: type) type {
 			return self.tryArray(validator, config) catch unreachable;
 		}
 
-		pub fn tryObject(self: Self, fields: []const Field(S), config: Object(S).Config) !*Object(S) {
+		pub fn tryObject(self: Self, fields: []const FieldValidator(S), config: Object(S).Config) !*Object(S) {
 			const allocator = self.allocator;
-			var owned = try allocator.alloc(Field(S), fields.len);
+			var owned = try allocator.alloc(FieldValidator(S), fields.len);
 
-			for (@constCast(fields), 0..) |*f, i| {
-				try f.validator.nestField(allocator, f);
+			for (@constCast(fields), 0..) |*fv, i| {
+				try fv.validator.nestField(allocator, &fv.field);
 				owned[i] = .{
-					.name = f.name,
-					.path = f.path,
-					.parts = f.parts,
-					.validator = f.validator,
+					.field = fv.field,
+					.validator = fv.validator,
 				};
 			}
 
@@ -141,43 +140,41 @@ pub fn Builder(comptime S: type) type {
 			val.* = try Object(S).init(self.allocator, owned, config);
 
 			if (config.nest) |nest| {
-				var forced_parent = try self.buildFieldForNesting(nest);
+				var forced_parent = try self.makeField(nest);
 				try val.nestField(allocator, &forced_parent);
 			}
 
 			return val;
 		}
-		pub fn object(self: Self, fields: []const Field(S), config: Object(S).Config) *Object(S) {
+		pub fn object(self: Self, fields: []const FieldValidator(S), config: Object(S).Config) *Object(S) {
 			return self.tryObject(fields, config) catch unreachable;
 		}
 
-		pub fn field(_: Self, name: []const u8, validator: anytype) Field(S) {
+		pub fn field(_: Self, name: []const u8, validator: anytype) FieldValidator(S) {
 			const Ptr = @TypeOf(validator);
 			const ptr_info = @typeInfo(Ptr);
 			if (ptr_info != .Pointer) @compileError("Field validator must be a pointer");
 
 			return .{
-				.name = name,
-				.path = name,
+				.field = .{
+					.name = name,
+					.path = name,
+				},
 				.validator = validator.validator(),
 			};
 		}
 
-		fn buildFieldForNesting(self: Self, parts: []const []const u8) !Field(S) {
+		pub fn makeField(_: Self, parts: []const []const u8) !Field {
 			if (parts.len == 1) {
 				return .{
 					.path = parts[0],
 					.name = parts[0],
 					.parts = null,
-					.validator = undefined,
 				};
 			}
-			const allocator = self.allocator;
-			_ = allocator;
 			return .{
 				.name = "",
 				.path = "",
-				.validator = undefined,
 				.parts = @constCast(parts),
 			};
 		}
