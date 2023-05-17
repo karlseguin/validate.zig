@@ -20,6 +20,7 @@ pub fn Float(comptime S: type) type {
 		required: bool,
 		min: ?f64,
 		max: ?f64,
+		parse: bool,
 		strict: bool,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
@@ -30,6 +31,7 @@ pub fn Float(comptime S: type) type {
 		pub const Config = struct {
 			min: ?f64 = null,
 			max: ?f64 = null,
+			parse: bool = false,
 			strict: bool = false,
 			required: bool = false,
 			function: ?*const fn(value: ?f64, context: *Context(S)) anyerror!?f64 = null,
@@ -57,6 +59,7 @@ pub fn Float(comptime S: type) type {
 			return .{
 				.min = config.min,
 				.max = config.max,
+				.parse = config.parse,
 				.strict = config.strict,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
@@ -90,6 +93,7 @@ pub fn Float(comptime S: type) type {
 				return self.executeFunction(null, context);
 			};
 
+			var parsed = false;
 			const value = switch (untyped_value) {
 				.Float => |f| f,
 				.Integer => |n| blk: {
@@ -98,6 +102,18 @@ pub fn Float(comptime S: type) type {
 						return null;
 					}
 					break :blk @intToFloat(f64, n);
+				},
+				.String => |s| blk: {
+					if (self.parse) {
+						const val = std.fmt.parseFloat(f64, s) catch {
+							try context.add(INVALID_TYPE);
+							return null;
+						};
+						parsed = true;
+						break :blk val;
+					}
+					try context.add(INVALID_TYPE);
+					return null;
 				},
 				else => {
 					try context.add(INVALID_TYPE);
@@ -121,7 +137,15 @@ pub fn Float(comptime S: type) type {
 				}
 			}
 
-			return self.executeFunction(value, context);
+			if (try self.executeFunction(value, context)) |val| {
+				return val;
+			}
+
+			if (parsed) {
+				return .{.Float = value};
+			}
+
+			return null;
 		}
 
 		fn executeFunction(self: *const Self, value: ?f64, context: *Context(S)) !?json.Value {
@@ -301,6 +325,36 @@ test "float: function" {
 		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 3.2}, &context));
 		try t.expectInvalid(.{.code = 997, .err = "float validation error"}, context);
+	}
+}
+
+test "float: parse" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.float(.{.max = 4.2, .parse = true});
+
+	{
+		// still works fine with correct type
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.3}, &context));
+		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.2}, context);
+	}
+
+	{
+		// parses a string and applies the validation on the parsed value
+		t.reset(&context);
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "4.3"}, &context));
+		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.2}, context);
+	}
+
+	{
+		// parses a string and returns the typed value
+		t.reset(&context);
+		try t.expectEqual(@as(f64, 4.1), (try validator.validateJsonValue(.{.String = "4.1"}, &context)).?.Float);
+		try t.expectEqual(true, context.isValid());
 	}
 }
 

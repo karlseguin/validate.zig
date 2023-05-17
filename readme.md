@@ -186,6 +186,9 @@ const age_validator = builder.int(.{
     // the maximum allowed value (inclusive of max), null == no limit
     .max = null, // i64
 
+    // when true, will accept a string input and attempt to convert it to an integer
+    .parse = false,
+
     // a custom validation function that will receive the value to validate
     // along with a validation.Context.
     function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64 = null,
@@ -214,6 +217,9 @@ const rating_validator = builder.float(.{
     // when true, if an integer is given, validation will fail
     .strict = false, 
 
+    // when true, will accept a string input and attempt to convert it to a float
+    .parse = false,
+
     // a custom validation function that will receive the value to validate
     // along with a validation.Context.
     function: ?*const fn(value: ?f64, context: *Context(S)) anyerror!?f64 = null,
@@ -231,6 +237,11 @@ A bool validator is created via the `builder.bool` function. This function takes
 const enabled_validator = builder.boolean(.{
     // whether the value is required or not
     .required = false,
+
+    // when true, will accept a string input and attempt to convert it to a boolean
+    // "1", "t", "true" == true (string comparison is case insensitive)
+    // "0", "f", "false" == false (string comparison is case insensitive)
+    .parse = false,
 
     // a custom validation function that will receive the value to validate
     // along with a validation.Context.

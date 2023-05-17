@@ -20,6 +20,7 @@ pub fn Int(comptime S: type) type {
 		required: bool,
 		min: ?i64,
 		max: ?i64,
+		parse: bool,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
 		function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64,
@@ -29,6 +30,7 @@ pub fn Int(comptime S: type) type {
 		pub const Config = struct {
 			min: ?i64 = null,
 			max: ?i64 = null,
+			parse: bool = false,
 			required: bool = false,
 			function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64 = null,
 		};
@@ -55,6 +57,7 @@ pub fn Int(comptime S: type) type {
 			return .{
 				.min = config.min,
 				.max = config.max,
+				.parse = config.parse,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
 				.required = config.required,
@@ -87,8 +90,21 @@ pub fn Int(comptime S: type) type {
 				return self.executeFunction(null, context);
 			};
 
+			var parsed = false;
 			const value = switch (untyped_value) {
 				.Integer => |n| n,
+				.String => |s| blk: {
+					if (self.parse) {
+						const val = std.fmt.parseInt(i64, s, 10) catch {
+							try context.add(INVALID_TYPE);
+							return null;
+						};
+						parsed = true;
+						break :blk val;
+					}
+					try context.add(INVALID_TYPE);
+					return null;
+				},
 				else => {
 					try context.add(INVALID_TYPE);
 					return null;
@@ -111,13 +127,21 @@ pub fn Int(comptime S: type) type {
 				}
 			}
 
-			return self.executeFunction(value, context);
+			if (try self.executeFunction(value, context)) |val| {
+				return val;
+			}
+
+			if (parsed) {
+				return .{.Integer = value};
+			}
+
+			return null;
 		}
 
 		fn executeFunction(self: *const Self, value: ?i64, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
-				return json.Value{.Integer = transformed};
+				return .{.Integer = transformed};
 			}
 			return null;
 		}
@@ -193,7 +217,6 @@ test "int: min" {
 	}
 }
 
-
 test "int: max" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
@@ -250,6 +273,36 @@ test "int: function" {
 		t.reset(&context);
 		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 3}, &context));
 		try t.expectInvalid(.{.code = 998, .err = "int validation error"}, context);
+	}
+}
+
+test "int: parse" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.int(.{.max = 4, .parse = true});
+
+	{
+		// still works fine with correct type
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 5}, &context));
+		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
+	}
+
+	{
+		// parses a string and applies the validation on the parsed value
+		t.reset(&context);
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "5"}, &context));
+		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
+	}
+
+	{
+		// parses a string and returns the typed value
+		t.reset(&context);
+		try t.expectEqual(@as(i64, 3), (try validator.validateJsonValue(.{.String = "3"}, &context)).?.Integer);
+		try t.expectEqual(true, context.isValid());
 	}
 }
 
