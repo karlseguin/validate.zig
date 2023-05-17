@@ -46,8 +46,8 @@ pub fn FieldValidator(comptime S: type) type {
 pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
-		fields: []FieldValidator(S),
-		field_lookup: ?std.StringHashMap(void),
+		remove_unknown: bool,
+		fields: std.StringHashMap(FieldValidator(S)),
 		function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap,
 
 		const Self = @This();
@@ -59,21 +59,12 @@ pub fn Object(comptime S: type) type {
 			function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap = null,
 		};
 
-		pub fn init(allocator: Allocator, fields: []FieldValidator(S), config: Config) !Self {
-			var field_lookup: ?std.StringHashMap(void) = null;
-			if (config.remove_unknown) {
-				var lookup = std.StringHashMap(void).init(allocator);
-				try lookup.ensureTotalCapacity(@intCast(u32, fields.len));
-				for (fields) |fv| {
-					try lookup.put(fv.field.name, {});
-				}
-				field_lookup = lookup;
-			}
+		pub fn init(_: Allocator, fields: std.StringHashMap(FieldValidator(S)), config: Config) !Self {
 			return .{
 				.fields = fields,
-				.field_lookup = field_lookup,
 				.function = config.function,
 				.required = config.required,
+				.remove_unknown = config.remove_unknown,
 			};
 		}
 
@@ -84,7 +75,9 @@ pub fn Object(comptime S: type) type {
 		pub fn nestField(self: *Self, allocator: Allocator, parent: *Field) !void {
 			const parent_path = parent.path;
 			const parent_parts = parent.parts;
-			for (self.fields) |*fv| {
+
+			var it = self.fields.valueIterator();
+			while (it.next()) |fv| {
 				var field = &fv.field;
 				field.path = try std.fmt.allocPrint(allocator, "{s}.{s}", .{parent_path, field.path});
 				if (parent_parts) |pp| {
@@ -150,7 +143,10 @@ pub fn Object(comptime S: type) type {
 			};
 
 			context.object = Typed.wrap(value);
-			for (self.fields) |fv| {
+
+			const fields = self.fields;
+			var it = fields.valueIterator();
+			while (it.next()) |fv| {
 				const f = fv.field;
 				context.field = f;
 				const name = f.name;
@@ -166,14 +162,15 @@ pub fn Object(comptime S: type) type {
 			}
 
 			const result = try self.executeFunction(value, context);
-			if (self.field_lookup) |fl| {
+			if (self.remove_unknown) {
 				var map = if (result) |r| r.Object else value;
+
 				var i: usize = 0;
 				const keys = map.keys();
 				var number_of_keys = keys.len;
 				while (i < number_of_keys) {
 					var key = keys[i];
-					if (fl.contains(key)) {
+					if (fields.contains(key)) {
 						i += 1;
 						continue;
 					}

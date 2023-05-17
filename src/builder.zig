@@ -126,18 +126,20 @@ pub fn Builder(comptime S: type) type {
 
 		pub fn tryObject(self: Self, fields: []const FieldValidator(S), config: Object(S).Config) !*Object(S) {
 			const allocator = self.allocator;
-			var owned = try allocator.alloc(FieldValidator(S), fields.len);
+			var lookup = std.StringHashMap(FieldValidator(S)).init(allocator);
+			try lookup.ensureTotalCapacity(@intCast(u32, fields.len));
 
-			for (@constCast(fields), 0..) |*fv, i| {
-				try fv.validator.nestField(allocator, &fv.field);
-				owned[i] = .{
-					.field = fv.field,
+			for (fields) |fv| {
+				var f = fv.field;
+				try fv.validator.nestField(allocator, &f);
+				lookup.putAssumeCapacity(f.name, .{
+					.field = f,
 					.validator = fv.validator,
-				};
+				});
 			}
 
 			const val = try self.allocator.create(Object(S));
-			val.* = try Object(S).init(self.allocator, owned, config);
+			val.* = try Object(S).init(self.allocator, lookup, config);
 
 			if (config.nest) |nest| {
 				var forced_parent = try self.makeField(nest);
