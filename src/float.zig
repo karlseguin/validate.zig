@@ -95,15 +95,15 @@ pub fn Float(comptime S: type) type {
 
 			var parsed = false;
 			const value = switch (untyped_value) {
-				.Float => |f| f,
-				.Integer => |n| blk: {
+				.float => |f| f,
+				.integer => |n| blk: {
 					if (self.strict) {
 						try context.add(INVALID_TYPE);
 						return null;
 					}
 					break :blk @intToFloat(f64, n);
 				},
-				.String => |s| blk: {
+				.string => |s| blk: {
 					if (self.parse) {
 						const val = std.fmt.parseFloat(f64, s) catch {
 							try context.add(INVALID_TYPE);
@@ -142,7 +142,7 @@ pub fn Float(comptime S: type) type {
 			}
 
 			if (parsed) {
-				return .{.Float = value};
+				return .{.float = value};
 			}
 
 			return null;
@@ -151,7 +151,7 @@ pub fn Float(comptime S: type) type {
 		fn executeFunction(self: *const Self, value: ?f64, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
-				return json.Value{.Float = transformed};
+				return json.Value{.float = transformed};
 			}
 			return null;
 		}
@@ -197,7 +197,7 @@ test "float: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.float(.{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "NOPE"}, &context));
+	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "NOPE"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_FLOAT}, context);
 }
 
@@ -211,13 +211,13 @@ test "float: strict" {
 	const validator = builder.float(.{.strict = true});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 4.1}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 99}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 99}, &context));
 		try t.expectInvalid(.{.code = codes.TYPE_FLOAT}, context);
 	}
 }
@@ -232,13 +232,13 @@ test "float: not strict" {
 	const validator = builder.float(.{});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 4.1}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 99}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 99}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -252,19 +252,19 @@ test "float: min" {
 
 	const validator = builder.float(.{.min = 4.2});
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 4.1}, &context));
 		try t.expectInvalid(.{.code = codes.FLOAT_MIN, .data_fmin = 4.2, .err = "cannot be less than 4.2"}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.2}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 4.2}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 293.2}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 293.2}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -279,19 +279,19 @@ test "float: max" {
 	const validator = builder.float(.{.max = 4.1});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.2}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 4.2}, &context));
 		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.1}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.1}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 4.1}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = -33.2}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = -33.2}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -306,24 +306,24 @@ test "float: function" {
 	const validator = builder.float(.{.function = testFloatValidator});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 99.1}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 99.1}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		try t.expectEqual(@as(f64, -9999.88), (try validator.validateJsonValue(null, &context)).?.Float);
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectEqual(@as(f64, -38291.2), (try validator.validateJsonValue(.{.Float = 2.1}, &context)).?.Float);
+		try t.expectEqual(@as(f64, -9999.88), (try validator.validateJsonValue(null, &context)).?.float);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 3.2}, &context));
+		try t.expectEqual(@as(f64, -38291.2), (try validator.validateJsonValue(.{.float = 2.1}, &context)).?.float);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 3.2}, &context));
 		try t.expectInvalid(.{.code = 997, .err = "float validation error"}, context);
 	}
 }
@@ -339,21 +339,21 @@ test "float: parse" {
 
 	{
 		// still works fine with correct type
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Float = 4.3}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.float = 4.3}, &context));
 		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.2}, context);
 	}
 
 	{
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "4.3"}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "4.3"}, &context));
 		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.2}, context);
 	}
 
 	{
 		// parses a string and returns the typed value
 		t.reset(&context);
-		try t.expectEqual(@as(f64, 4.1), (try validator.validateJsonValue(.{.String = "4.1"}, &context)).?.Float);
+		try t.expectEqual(@as(f64, 4.1), (try validator.validateJsonValue(.{.string = "4.1"}, &context)).?.float);
 		try t.expectEqual(true, context.isValid());
 	}
 }

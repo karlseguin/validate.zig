@@ -103,7 +103,7 @@ pub fn Array(comptime S: type) type {
 			};
 
 			var value = switch (untyped_value) {
-				.Array => |a| a,
+				.array => |a| a,
 				else => {
 					try context.add(INVALID_TYPE);
 					return null;
@@ -144,7 +144,7 @@ pub fn Array(comptime S: type) type {
 		fn executeFunction(self: *const Self, value: ?json.Array, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
-				return json.Value{.Array = transformed};
+				return json.Value{.array = transformed};
 			}
 			return null;
 		}
@@ -181,7 +181,7 @@ test "array: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.array(null, .{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "Hi"}, &context));
+	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "Hi"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_ARRAY}, context);
 }
 
@@ -308,9 +308,9 @@ test "array: change value" {
 		const typed = objectValidator.validateJsonS("{\"items\": [1, 2, -5]}", &context).ok;
 		try t.expectEqual(true, context.isValid());
 		const items = typed.array("items").?.items;
-		try t.expectEqual(@as(i64, -1), items[0].Integer);
-		try t.expectEqual(@as(i64, 2), items[1].Integer);
-		try t.expectEqual(@as(i64, -5), items[2].Integer);
+		try t.expectEqual(@as(i64, -1), items[0].integer);
+		try t.expectEqual(@as(i64, 2), items[1].integer);
+		try t.expectEqual(@as(i64, -5), items[2].integer);
 	}
 }
 
@@ -330,15 +330,15 @@ test "array: function" {
 		const typed = objectValidator.validateJsonS("{\"items\": [2]}", &context).ok;
 		try t.expectEqual(true, context.isValid());
 		const items = typed.array("items").?.items;
-		try t.expectEqual(@as(i64, 9001), items[0].Integer);
+		try t.expectEqual(@as(i64, 9001), items[0].integer);
 	}
 
 	{
 		const typed = objectValidator.validateJsonS("{\"items\": [2, 3]}", &context).ok;
 		try t.expectEqual(true, context.isValid());
 		const items = typed.array("items").?.items;
-		try t.expectEqual(@as(i64, 2), items[0].Integer);
-		try t.expectEqual(@as(i64, 3), items[1].Integer);
+		try t.expectEqual(@as(i64, 2), items[0].integer);
+		try t.expectEqual(@as(i64, 3), items[1].integer);
 	}
 }
 
@@ -351,7 +351,7 @@ fn testArrayValidator(value: ?json.Array, _: *Context(void)) !?json.Array {
 	const n = value orelse unreachable;
 
 	if (n.items.len == 1) {
-		n.items[0] = .{.Integer = 9001};
+		n.items[0] = .{.integer = 9001};
 		return n;
 	}
 

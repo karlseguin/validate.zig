@@ -96,7 +96,7 @@ pub fn Object(comptime S: type) type {
 
 		pub fn validateJsonS(self: *Self, data: []const u8, context: *Context(S)) Result {
 			const allocator = context.allocator; // an arena allocator
-			var parser = std.json.Parser.init(allocator, false);
+			var parser = std.json.Parser.init(allocator, .alloc_always);
 			var tree = parser.parse(data) catch |err| {
 				return .{.json = err};
 			};
@@ -112,10 +112,10 @@ pub fn Object(comptime S: type) type {
 
 			var typed = Typed.empty;
 			if (result) |value| {
-				typed = Typed{.root = value.Object};
+				typed = Typed{.root = value.object};
 			} else if (root) |r| {
 				switch (r) {
-					.Object => |o| typed = Typed.wrap(o),
+					.object => |o| typed = Typed.wrap(o),
 					else => {},
 				}
 			}
@@ -135,7 +135,7 @@ pub fn Object(comptime S: type) type {
 			};
 
 			var value = switch (untyped_value) {
-				.Object => |o| o,
+				.object => |o| o,
 				else => {
 					try context.add(INVALID_TYPE);
 					return null;
@@ -163,7 +163,7 @@ pub fn Object(comptime S: type) type {
 
 			const result = try self.executeFunction(value, context);
 			if (self.remove_unknown) {
-				var map = if (result) |r| r.Object else value;
+				var map = if (result) |r| r.object else value;
 
 				var i: usize = 0;
 				const keys = map.keys();
@@ -177,7 +177,7 @@ pub fn Object(comptime S: type) type {
 					map.swapRemoveAt(i);
 					number_of_keys -= 1;
 				}
-				return .{.Object = map};
+				return .{.object = map};
 			} else {
 				return result;
 			}
@@ -186,7 +186,7 @@ pub fn Object(comptime S: type) type {
 		fn executeFunction(self: *const Self, value: ?json.ObjectMap, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
-				return json.Value{.Object = transformed};
+				return json.Value{.object = transformed};
 			}
 			return null;
 		}
@@ -257,7 +257,7 @@ test "object: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.object(&.{}, .{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "Hi"}, &context));
+	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "Hi"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_OBJECT}, context);
 }
 

@@ -92,8 +92,8 @@ pub fn Int(comptime S: type) type {
 
 			var parsed = false;
 			const value = switch (untyped_value) {
-				.Integer => |n| n,
-				.String => |s| blk: {
+				.integer => |n| n,
+				.string => |s| blk: {
 					if (self.parse) {
 						const val = std.fmt.parseInt(i64, s, 10) catch {
 							try context.add(INVALID_TYPE);
@@ -132,7 +132,7 @@ pub fn Int(comptime S: type) type {
 			}
 
 			if (parsed) {
-				return .{.Integer = value};
+				return .{.integer = value};
 			}
 
 			return null;
@@ -141,7 +141,7 @@ pub fn Int(comptime S: type) type {
 		fn executeFunction(self: *const Self, value: ?i64, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
-				return .{.Integer = transformed};
+				return .{.integer = transformed};
 			}
 			return null;
 		}
@@ -187,7 +187,7 @@ test "int: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.int(.{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "NOPE"}, &context));
+	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "NOPE"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_INT}, context);
 }
 
@@ -200,19 +200,19 @@ test "int: min" {
 
 	const validator = builder.int(.{.min = 4});
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 3}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 3}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MIN, .data_min = 4}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 4}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 4}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 100}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 100}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -227,19 +227,19 @@ test "int: max" {
 	const validator = builder.int(.{.max = 4});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 5}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 5}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 4}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 4}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = -30}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = -30}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -254,24 +254,24 @@ test "int: function" {
 	const validator = builder.int(.{.function = testIntValidator});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 99}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 99}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		try t.expectEqual(@as(i64, -9999), (try validator.validateJsonValue(null, &context)).?.Integer);
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectEqual(@as(i64, -38291), (try validator.validateJsonValue(.{.Integer = 2}, &context)).?.Integer);
+		try t.expectEqual(@as(i64, -9999), (try validator.validateJsonValue(null, &context)).?.integer);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 3}, &context));
+		try t.expectEqual(@as(i64, -38291), (try validator.validateJsonValue(.{.integer = 2}, &context)).?.integer);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 3}, &context));
 		try t.expectInvalid(.{.code = 998, .err = "int validation error"}, context);
 	}
 }
@@ -287,21 +287,21 @@ test "int: parse" {
 
 	{
 		// still works fine with correct type
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 5}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 5}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
 	}
 
 	{
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "5"}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "5"}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
 	}
 
 	{
 		// parses a string and returns the typed value
 		t.reset(&context);
-		try t.expectEqual(@as(i64, 3), (try validator.validateJsonValue(.{.String = "3"}, &context)).?.Integer);
+		try t.expectEqual(@as(i64, 3), (try validator.validateJsonValue(.{.string = "3"}, &context)).?.integer);
 		try t.expectEqual(true, context.isValid());
 	}
 }

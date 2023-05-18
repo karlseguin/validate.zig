@@ -132,42 +132,42 @@ pub fn Iterator(comptime T: type) type {
 
 pub fn boolean(value: json.Value) ?bool {
 	switch (value) {
-		.Bool => |b| return b,
+		.bool => |b| return b,
 		else => return null,
 	}
 }
 
 pub fn int(value: json.Value) ?i64 {
 	switch (value) {
-		.Integer => |n| return n,
+		.integer => |n| return n,
 		else => return null,
 	}
 }
 
 pub fn float(value: json.Value) ?f64 {
 	switch (value) {
-		.Float => |f| return f,
+		.float => |f| return f,
 		else => return null,
 	}
 }
 
 pub fn string(value: json.Value) ?[]const u8 {
 	switch (value) {
-		.String => |s| return s,
+		.string => |s| return s,
 		else => return null,
 	}
 }
 
 pub fn array(value: json.Value) ?json.Array {
 	switch (value) {
-		.Array => |a| return a,
+		.array => |a| return a,
 		else => return null,
 	}
 }
 
 pub fn object(value: json.Value) ?Typed {
 	switch (value) {
-		.Object => |o| return .{.root = o},
+		.object => |o| return .{.root = o},
 		else => return null,
 	}
 }
@@ -418,12 +418,12 @@ const TestContainer = struct {
 };
 
 fn testJson(data: []const u8) TestContainer {
-	var parser = std.json.Parser.init(t.allocator, false);
+	var parser = std.json.Parser.init(t.allocator, .alloc_always);
 	defer parser.deinit();
 
 	var tree = parser.parse(data) catch unreachable;
 	return .{
 		.tree = tree,
-		.typed = .{.root = tree.root.Object},
+		.typed = .{.root = tree.root.object},
 	};
 }

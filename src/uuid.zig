@@ -98,7 +98,7 @@ pub fn UUID(comptime S: type) type {
 			};
 
 			const value = switch (untyped_value) {
-				.String => |s| s,
+				.string => |s| s,
 				else => {
 					try context.add(INVALID_TYPE);
 					return null;
@@ -145,7 +145,7 @@ pub fn UUID(comptime S: type) type {
 		}
 
 		fn asJsonValue(optional_value: ?[]const u8) ?json.Value {
-			if (optional_value) |value| return .{.String = value};
+			if (optional_value) |value| return .{.string = value};
 			return null;
 		}
 	};
@@ -190,7 +190,7 @@ test "UUID: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.uuid(.{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 33}, &context));
+	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 33}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 }
 
@@ -214,7 +214,7 @@ test "UUID: uuid" {
 			"01234567-89AB-CDEF-abcd-ef1234567890",
 		};
 		for (valids) |valid| {
-			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = valid}, &context));
+			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = valid}, &context));
 			try t.expectEqual(true, context.isValid());
 		}
 	}
@@ -222,7 +222,7 @@ test "UUID: uuid" {
 	{
 		// empty
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = ""}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = ""}, &context));
 		try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 	}
 
@@ -239,7 +239,7 @@ test "UUID: uuid" {
 			"0123456-789AB-CDEF-abc-def1234567890", // 4th dash if off
 		};
 		for (invalids) |invalid| {
-			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = invalid}, &context));
+			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = invalid}, &context));
 			try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 		}
 	}
@@ -255,24 +255,24 @@ test "UUID: function" {
 	const validator = builder.uuid(.{.function = testUUIDValidator});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "5111DC00-3b3E-445E-BA29-80B46F73D828"}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "5111DC00-3b3E-445E-BA29-80B46F73D828"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		try t.expectString("is-null", (try validator.validateJsonValue(null, &context)).?.String);
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectString("FFFFFFFF-FFFF-0000-FFFF-FFFFFFFFFFFF", (try validator.validateJsonValue(.{.String = "00000000-0000-0000-0000-000000000000"}, &context)).?.String);
+		try t.expectString("is-null", (try validator.validateJsonValue(null, &context)).?.string);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "ffffffff-ffff-ffff-ffff-ffffffffffff"}, &context));
+		try t.expectString("FFFFFFFF-FFFF-0000-FFFF-FFFFFFFFFFFF", (try validator.validateJsonValue(.{.string = "00000000-0000-0000-0000-000000000000"}, &context)).?.string);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "ffffffff-ffff-ffff-ffff-ffffffffffff"}, &context));
 		try t.expectInvalid(.{.code = 1010, .err = "uuid validation error"}, context);
 	}
 }

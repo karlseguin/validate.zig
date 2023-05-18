@@ -52,6 +52,12 @@ pub const InvalidData = union(InvalidDataType) {
 	details: Details, // generic string to be used by applications
 	generic: std.json.Value, // generic, anything that std.json.ObjectMap can represent
 
+	pub fn jsonStringify(self: InvalidData, options: std.json.StringifyOptions, out: anytype) !void {
+		switch (self) {
+			inline else => |v| return std.json.stringify(v, options, out),
+		}
+	}
+
 	pub const MinInt = struct {
 		min: i64
 	};

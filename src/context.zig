@@ -172,27 +172,27 @@ pub const GenericDataBuilder = struct {
 	}
 
 	pub fn nul(self: Self, key: [:0]const u8) Self {
-		self.inner.put(key, .{.Null = {}});
+		self.inner.put(key, .{.null = {}});
 		return self;
 	}
 
 	pub fn boolean(self: Self, key: [:0]const u8, value: bool) Self {
-		self.inner.put(key,.{.Bool = value});
+		self.inner.put(key,.{.bool = value});
 		return self;
 	}
 
 	pub fn int(self: Self, key: [:0]const u8, value: i64) Self {
-		self.inner.put(key,.{.Integer = value});
+		self.inner.put(key,.{.integer = value});
 		return self;
 	}
 
 	pub fn float(self: Self, key: [:0]const u8, value: f64) Self {
-		self.inner.put(key,.{.Float = value});
+		self.inner.put(key,.{.float = value});
 		return self;
 	}
 
 	pub fn string(self: Self, key: [:0]const u8, value: []const u8) Self {
-		self.inner.put(key,.{.String = value});
+		self.inner.put(key,.{.string = value});
 		return self;
 	}
 
@@ -201,7 +201,7 @@ pub const GenericDataBuilder = struct {
 		if (inner.err) |err| {
 			return err;
 		}
-		return .{.generic = .{.Object = inner.root}};
+		return .{.generic = .{.object = inner.root}};
 	}
 };
 

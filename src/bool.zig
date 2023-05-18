@@ -64,8 +64,8 @@ pub fn Bool(comptime S: type) type {
 
 			var parsed = false;
 			const value = switch (untyped_value) {
-				.Bool => |b| b,
-				.String => |s| blk: {
+				.bool => |b| b,
+				.string => |s| blk: {
 					if (self.parse and s.len > 0) {
 						// prematurely set this, either it's true, or it won't matter
 						// because we'll return with an INVALID_TYPE error
@@ -93,7 +93,7 @@ pub fn Bool(comptime S: type) type {
 			}
 
 			if (parsed) {
-				return .{.Bool = value};
+				return .{.bool = value};
 			}
 
 			return null;
@@ -102,7 +102,7 @@ pub fn Bool(comptime S: type) type {
 		fn executeFunction(self: *const Self, value: ?bool, context: *Context(S)) !?json.Value {
 			if (self.function) |f| {
 				const transformed = try f(value, context) orelse return null;
-				return json.Value{.Bool = transformed};
+				return json.Value{.bool = transformed};
 			}
 			return null;
 		}
@@ -149,19 +149,19 @@ test "bool: type" {
 
 	const validator = builder.boolean(.{});
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.String = "NOPE"}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "NOPE"}, &context));
 		try t.expectInvalid(.{.code = codes.TYPE_BOOL}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Bool = true}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.bool = true}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Bool = false}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.bool = false}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -177,7 +177,7 @@ test "bool: parse" {
 
 	{
 		// still works fine with correct type
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Bool = true}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.bool = true}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -185,7 +185,7 @@ test "bool: parse" {
 	for (true_strings) |value| {
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(true, (try validator.validateJsonValue(.{.String = value}, &context)).?.Bool);
+		try t.expectEqual(true, (try validator.validateJsonValue(.{.string = value}, &context)).?.bool);
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -193,7 +193,7 @@ test "bool: parse" {
 	for (false_strings) |value| {
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(false, (try validator.validateJsonValue(.{.String = value}, &context)).?.Bool);
+		try t.expectEqual(false, (try validator.validateJsonValue(.{.string = value}, &context)).?.bool);
 		try t.expectEqual(true, context.isValid());
 	}
 }

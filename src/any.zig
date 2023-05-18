@@ -108,24 +108,24 @@ test "any: function" {
 	const validator = builder.any(.{.function = testAnyValidator});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 1}, &context));
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 1}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		try t.expectEqual(@as(f64, 12.3), (try validator.validateJsonValue(.{.Integer = 32}, &context)).?.Float);
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectEqual(@as(i64, 9991), (try validator.validateJsonValue(null, &context)).?.Integer);
+		try t.expectEqual(@as(f64, 12.3), (try validator.validateJsonValue(.{.integer = 32}, &context)).?.float);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.Integer = 3}, &context));
+		try t.expectEqual(@as(i64, 9991), (try validator.validateJsonValue(null, &context)).?.integer);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 3}, &context));
 		try t.expectInvalid(.{.code = 28, .err = "any validation error"}, context);
 	}
 }
@@ -133,15 +133,15 @@ test "any: function" {
 fn testAnyValidator(value: ?json.Value, context: *Context(i64)) !?json.Value {
 	std.debug.assert(context.state == 22);
 
-	const n = value orelse return json.Value{.Integer = 9991};
+	const n = value orelse return json.Value{.integer = 9991};
 
-	if (n.Integer == 32) {
-		return .{.Float = 12.3};
+	if (n.integer == 32) {
+		return .{.float = 12.3};
 	}
-	if (n.Integer == 1) {
+	if (n.integer == 1) {
 		return null;
 	}
-	if (n.Integer == 3) {
+	if (n.integer == 3) {
 		try context.add(v.Invalid{
 			.code = 28,
 			.err = "any validation error",
