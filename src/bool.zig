@@ -1,13 +1,12 @@
 const std = @import("std");
-const t = @import("t.zig");
 
 const v = @import("validate.zig");
+const typed = @import("typed");
 const codes = @import("codes.zig");
 const Builder = @import("builder.zig").Builder;
 const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
 
-const json = std.json;
 const Allocator = std.mem.Allocator;
 
 const INVALID_TYPE = v.Invalid{
@@ -54,80 +53,79 @@ pub fn Bool(comptime S: type) type {
 		// part of the Validator interface, but noop for bools
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
-		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
-			const untyped_value = input orelse {
+		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
+			var bool_value: ?bool = null;
+			if (input) |untyped_value| {
+				bool_value = switch (untyped_value) {
+					.bool => |b| b,
+					.string => |s| blk: {
+						if (self.parse and s.len > 0) {
+							if (s[0] == '1') break :blk true;
+							if (s[0] == 'T') break :blk true;
+							if (s[0] == 't') break :blk true;
+							if (s[0] == '0') break :blk false;
+							if (s[0] == 'F') break :blk false;
+							if (s[0] == 'f') break :blk false;
+							if (std.ascii.eqlIgnoreCase(s, "true")) break :blk true;
+							if (std.ascii.eqlIgnoreCase(s, "false")) break :blk false;
+						}
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					},
+					else => {
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					}
+				};
+			}
+
+			if (try self.validate(bool_value, context)) |value| {
+				return .{.bool = value};
+			}
+			return .{.null = {}};
+		}
+
+		pub fn validate(self: *const Self, optional_value: ?bool, context: *Context(S)) !?bool {
+			const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
+					return null;
 				}
 				return self.executeFunction(null, context);
 			};
 
-			var parsed = false;
-			const value = switch (untyped_value) {
-				.bool => |b| b,
-				.string => |s| blk: {
-					if (self.parse and s.len > 0) {
-						// prematurely set this, either it's true, or it won't matter
-						// because we'll return with an INVALID_TYPE error
-						parsed = true;
-						if (s[0] == '1') break :blk true;
-						if (s[0] == 'T') break :blk true;
-						if (s[0] == 't') break :blk true;
-						if (s[0] == '0') break :blk false;
-						if (s[0] == 'F') break :blk false;
-						if (s[0] == 'f') break :blk false;
-						if (std.ascii.eqlIgnoreCase(s, "true")) break :blk true;
-						if (std.ascii.eqlIgnoreCase(s, "false")) break :blk false;
-					}
-					try context.add(INVALID_TYPE);
-					return null;
-				},
-				else => {
-					try context.add(INVALID_TYPE);
-					return null;
-				}
-			};
-
-			if (try self.executeFunction(value, context)) |val| {
-				return val;
-			}
-
-			if (parsed) {
-				return .{.bool = value};
-			}
-
-			return null;
+			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?bool, context: *Context(S)) !?json.Value {
+		fn executeFunction(self: *const Self, value: ?bool, context: *Context(S)) !?bool {
 			if (self.function) |f| {
-				const transformed = try f(value, context) orelse return null;
-				return json.Value{.bool = transformed};
+				return f(value, context);
 			}
-			return null;
+			return value;
 		}
 	};
 }
 
-const nullJson = @as(?json.Value, null);
+const t = @import("t.zig");
+const nullValue = typed.Value{.null = {}};
 test "bool: required" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	var context = t.context();
 	defer context.deinit(t.allocator);
 
-	var builder = try Builder(void).init(t.allocator);
+	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
 	const notRequired = builder.boolean(.{.required = false, });
 	const required = notRequired.setRequired(true, &builder);
 
 	{
-		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));
+		try t.expectEqual(@as(?bool, null), try required.validate(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try notRequired.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -135,49 +133,49 @@ test "bool: required" {
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
 		const validator = builder.boolean(.{.required = false});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
 
 test "bool: type" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	var context = t.context();
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.boolean(.{});
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "NOPE"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "NOPE"}, &context));
 		try t.expectInvalid(.{.code = codes.TYPE_BOOL}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.bool = true}, &context));
+		try t.expectEqual(true, (try validator.validateValue(.{.bool = true}, &context)).bool);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.bool = false}, &context));
+		try t.expectEqual(false, (try validator.validateValue(.{.bool = false}, &context)).bool);
 		try t.expectEqual(true, context.isValid());
 	}
 }
 
 test "bool: parse" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	var context = t.context();
 	defer context.deinit(t.allocator);
 
-	const builder = try Builder(void).init(t.allocator);
+	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.boolean(.{.parse = true});
 
 	{
 		// still works fine with correct type
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.bool = true}, &context));
+		try t.expectEqual(true, (try validator.validateValue(.{.bool = true}, &context)).bool);
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -185,7 +183,7 @@ test "bool: parse" {
 	for (true_strings) |value| {
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(true, (try validator.validateJsonValue(.{.string = value}, &context)).?.bool);
+		try t.expectEqual(true, (try validator.validateValue(.{.string = value}, &context)).bool);
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -193,7 +191,7 @@ test "bool: parse" {
 	for (false_strings) |value| {
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(false, (try validator.validateJsonValue(.{.string = value}, &context)).?.bool);
+		try t.expectEqual(false, (try validator.validateValue(.{.string = value}, &context)).bool);
 		try t.expectEqual(true, context.isValid());
 	}
 }

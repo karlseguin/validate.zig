@@ -1,15 +1,15 @@
 const std = @import("std");
+const typed = @import("typed");
 const Array = @import("array.zig").Array;
 const Field = @import("validate.zig").Field;
 const Context = @import("context.zig").Context;
 
-const json = std.json;
 const Allocator = std.mem.Allocator;
 
 pub fn Validator(comptime S: type) type {
 	return struct {
 		ptr: *anyopaque,
-		validateFn: *const fn(*anyopaque, value: ?json.Value, context: *Context(S)) anyerror!?json.Value,
+		validateFn: *const fn(*anyopaque, value: ?typed.Value, context: *Context(S)) anyerror!typed.Value,
 		nestFieldFn: *const fn(*anyopaque, allocator: Allocator, parent: *Field) anyerror!void,
 
 		pub fn init(ptr: anytype) Validator(S) {
@@ -22,9 +22,9 @@ pub fn Validator(comptime S: type) type {
 			const alignment = ptr_info.Pointer.alignment;
 
 			const gen = struct {
-				pub fn validateImpl(pointer: *anyopaque, value: ?json.Value, context: *Context(S)) !?json.Value {
+				pub fn validateImpl(pointer: *anyopaque, value: ?typed.Value, context: *Context(S)) !typed.Value {
 					const self = @ptrCast(Ptr, @alignCast(alignment, pointer));
-					return @call(.always_inline, ptr_info.Pointer.child.validateJsonValue, .{self, value, context});
+					return @call(.always_inline, ptr_info.Pointer.child.validateValue, .{self, value, context});
 				}
 				pub fn nestFieldImpl(pointer: *anyopaque, allocator: Allocator, parent: *Field) !void {
 					const self = @ptrCast(Ptr, @alignCast(alignment, pointer));
@@ -39,7 +39,7 @@ pub fn Validator(comptime S: type) type {
 			};
 		}
 
-		pub inline fn validateJsonValue(self: Validator(S), value: ?json.Value, context: *Context(S)) !?json.Value {
+		pub inline fn validateValue(self: Validator(S), value: ?typed.Value, context: *Context(S)) !typed.Value {
 			return self.validateFn(self.ptr, value, context);
 		}
 

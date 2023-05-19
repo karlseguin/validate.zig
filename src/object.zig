@@ -1,11 +1,9 @@
 const std = @import("std");
 const json = std.json;
 
-const t = @import("t.zig");
-
 const v = @import("validate.zig");
 const codes = @import("codes.zig");
-const Typed = @import("typed.zig").Typed;
+const typed = @import("typed");
 const Builder = @import("builder.zig").Builder;
 const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
@@ -46,17 +44,15 @@ pub fn FieldValidator(comptime S: type) type {
 pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
-		remove_unknown: bool,
 		fields: std.StringHashMap(FieldValidator(S)),
-		function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap,
+		function: ?*const fn(value: ?typed.Object, context: *Context(S)) anyerror!?typed.Object,
 
 		const Self = @This();
 
 		pub const Config = struct {
 			required: bool = false,
-			remove_unknown: bool = false,
 			nest: ?[]const []const u8 = null,
-			function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap = null,
+			function: ?*const fn(value: ?typed.Object, context: *Context(S)) anyerror!?typed.Object = null,
 		};
 
 		pub fn init(_: Allocator, fields: std.StringHashMap(FieldValidator(S)), config: Config) !Self {
@@ -64,7 +60,6 @@ pub fn Object(comptime S: type) type {
 				.fields = fields,
 				.function = config.function,
 				.required = config.required,
-				.remove_unknown = config.remove_unknown,
 			};
 		}
 
@@ -94,55 +89,64 @@ pub fn Object(comptime S: type) type {
 			}
 		}
 
-		pub fn validateJsonS(self: *Self, data: []const u8, context: *Context(S)) Result {
+		pub fn validateJsonS(self: *Self, data: []const u8, context: *Context(S)) !typed.Object {
 			const allocator = context.allocator; // an arena allocator
 			var parser = std.json.Parser.init(allocator, .alloc_always);
-			var tree = parser.parse(data) catch |err| {
-				return .{.json = err};
-			};
+			defer parser.deinit();
+
+			var tree = parser.parse(data) catch return error.InvalidJson;
+
 			return self.validateJsonV(tree.root, context);
 		}
 
-		pub fn validateJsonV(self: *Self, root: ?json.Value, context: *Context(S)) Result {
-			const initial_errors = context._error_len;
+		pub fn validateJsonV(self: *Self, optional_json_value: ?std.json.Value, context: *Context(S)) !typed.Object {
+			var typed_value: ?typed.Value = null;
+			if (optional_json_value) |json_value| {
+				typed_value = switch (json_value) {
+					.null => .{.null = {}},
+					.object => try typed.fromJson(context.allocator, json_value),
+					else => {
+						try context.add(INVALID_TYPE);
+						return typed.Object.readonlyEmpty();
+					}
+				};
+			}
 
-			const result = self.validateJsonValue(root, context) catch |err| {
-				return .{.err = err};
+			return switch (try self.validateValue(typed_value, context)) {
+				.null => typed.Object.readonlyEmpty(),
+				.object => |obj| obj,
+				else => unreachable,
 			};
-
-			var typed = Typed.empty;
-			if (result) |value| {
-				typed = Typed{.root = value.object};
-			} else if (root) |r| {
-				switch (r) {
-					.object => |o| typed = Typed.wrap(o),
-					else => {},
-				}
-			}
-
-			if (context._error_len != initial_errors) {
-				return .{.invalid = .{.input = typed, .errors = context.errors()}};
-			}
-			return .{.ok = typed};
 		}
 
-		pub fn validateJsonValue(self: *const Self, optional_value: ?json.Value, context: *Context(S)) !?json.Value {
-			const untyped_value = optional_value orelse {
+		pub fn validateValue(self: *const Self, optional_value: ?typed.Value, context: *Context(S)) !typed.Value {
+			var object_value: ?typed.Object = null;
+			if (optional_value) |untyped_value| {
+				object_value = switch (untyped_value) {
+					.object => |obj| obj,
+					else => {
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					}
+				};
+			}
+
+			if (try self.validate(object_value, context)) |value| {
+				return .{.object = value};
+			}
+			return .{.null = {}};
+		}
+
+		pub fn validate(self: *const Self, optional_value: ?typed.Object, context: *Context(S)) !?typed.Object {
+			var value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
+					return null;
 				}
 				return self.executeFunction(null, context);
 			};
 
-			var value = switch (untyped_value) {
-				.object => |o| o,
-				else => {
-					try context.add(INVALID_TYPE);
-					return null;
-				},
-			};
-
-			context.object = Typed.wrap(value);
+			context.object = value;
 
 			const fields = self.fields;
 			var it = fields.valueIterator();
@@ -150,69 +154,28 @@ pub fn Object(comptime S: type) type {
 				const f = fv.field;
 				context.field = f;
 				const name = f.name;
-				if (value.getEntry(name)) |entry| {
-					if (try fv.validator.validateJsonValue(entry.value_ptr.*, context)) |new_field_value| {
-						entry.value_ptr.* = new_field_value;
-					}
+
+				if (value.map.getEntry(name)) |entry| {
+					entry.value_ptr.* = try fv.validator.validateValue(entry.value_ptr.*, context);
 				} else {
-					if (try fv.validator.validateJsonValue(null, context)) |new_field_value| {
-						try value.put(name, new_field_value);
-					}
+					try value.put(name, try fv.validator.validateValue(null, context));
 				}
 			}
 
-			const result = try self.executeFunction(value, context);
-			if (self.remove_unknown) {
-				var map = if (result) |r| r.object else value;
-
-				var i: usize = 0;
-				const keys = map.keys();
-				var number_of_keys = keys.len;
-				while (i < number_of_keys) {
-					var key = keys[i];
-					if (fields.contains(key)) {
-						i += 1;
-						continue;
-					}
-					map.swapRemoveAt(i);
-					number_of_keys -= 1;
-				}
-				return .{.object = map};
-			} else {
-				return result;
-			}
+			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?json.ObjectMap, context: *Context(S)) !?json.Value {
+		fn executeFunction(self: *const Self, value: ?typed.Object, context: *Context(S)) !?typed.Object {
 			if (self.function) |f| {
-				const transformed = try f(value, context) orelse return null;
-				return json.Value{.object = transformed};
+				return f(value, context);
 			}
-			return null;
+			return value;
 		}
 	};
 }
 
-pub const ResultTag = enum {
-	ok,
-	err,
-	json,
-	invalid,
-};
-
-pub const Result = union(ResultTag) {
-	ok: Typed,
-	err: anyerror,
-	json: anyerror,
-	invalid: Invalid,
-
-	const Invalid = struct {
-		input: Typed,
-		errors: []v.InvalidField,
-	};
-};
-
-const nullJson = @as(?json.Value, null);
+const t = @import("t.zig");
+const nullValue = typed.Value{.null = {}};
 test "object: invalidJson" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
@@ -222,10 +185,7 @@ test "object: invalidJson" {
 
 	const object_validator = builder.object(&.{}, .{});
 
-	switch (object_validator.validateJsonS("{a", &context)) {
-		.json => {},
-		else => unreachable,
-	}
+	try t.expectError(error.InvalidJson, object_validator.validateJsonS("{a", &context));
 }
 
 test "object: required" {
@@ -237,14 +197,14 @@ test "object: required" {
 
 	{
 		const validator = builder.object(&.{}, .{.required = true});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
 		const validator = builder.object(&.{}, .{.required = false});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -257,7 +217,7 @@ test "object: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.object(&.{}, .{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "Hi"}, &context));
+	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "Hi"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_OBJECT}, context);
 }
 
@@ -273,8 +233,8 @@ test "object: field" {
 		builder.field("name", name_validator),
 	}, .{});
 
-	const errors = object_validator.validateJsonS("{}", &context).invalid.errors;
-	try t.expectInvalidErrors(.{.code = codes.REQUIRED, .field = "name"}, errors);
+	_ = try object_validator.validateJsonS("{}", &context);
+	try t.expectInvalid(.{.code = codes.REQUIRED, .field = "name"}, context);
 }
 
 test "object: nested" {
@@ -301,19 +261,19 @@ test "object: nested" {
 	const dataValidator = builder.object(&.{builder.field("user", user_validator)}, .{});
 
 	{
-		const errors = dataValidator.validateJsonS("{}", &context).invalid.errors;
-		try t.expectInvalidErrors(.{.code = codes.REQUIRED, .field = "user"}, errors);
+		_ = try dataValidator.validateJsonS("{}", &context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user"}, context);
 	}
 
 	{
 		t.reset(&context);
-		const errors = dataValidator.validateJsonS("{\"user\": 3}", &context).invalid.errors;
-		try t.expectInvalidErrors(.{.code = codes.TYPE_OBJECT, .field = "user"}, errors);
+		_ = try dataValidator.validateJsonS("{\"user\": 3}", &context);
+		try t.expectInvalid(.{.code = codes.TYPE_OBJECT, .field = "user"}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = dataValidator.validateJsonS("{\"user\": {}}", &context);
+		_ = try dataValidator.validateJsonS("{\"user\": {}}", &context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.id"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.any"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
@@ -336,7 +296,7 @@ test "object: forced nesting" {
 	}, .{.nest = &[_][]const u8{"user"}});
 
 	{
-		_ = user_validator.validateJsonS("{}", &context);
+		_ = try user_validator.validateJsonS("{}", &context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
 	}
 }
@@ -354,42 +314,24 @@ test "object: change value" {
 	}, .{});
 
 	{
-		const typed = object_validator.validateJsonS("{\"name\": \"normal\", \"c\": 33}", &context).ok;
+		const to = try object_validator.validateJsonS("{\"name\": \"normal\", \"c\": 33}", &context);
+		std.debug.print("HERE\n", .{});
 		try t.expectEqual(true, context.isValid());
-		try t.expectString("normal", typed.string("name").?);
+		try t.expectString("normal", to.get([]const u8, "name").?);
 	}
 
 	{
-		const typed = object_validator.validateJsonS("{\"name\": \"!\", \"c\":33}", &context).ok;
+		const to = try object_validator.validateJsonS("{\"name\": \"!\", \"c\":33}", &context);
 		try t.expectEqual(true, context.isValid());
-		try t.expectString("abc", typed.string("name").?);
+		try t.expectString("abc", to.get([]u8, "name").?);
 	}
 }
 
-test "object: remove_unknown" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
-	defer context.deinit(t.allocator);
-
-	var builder = try Builder(void).init(t.allocator);
-	defer builder.deinit(t.allocator);
-
-	const object_validator = builder.object(&.{
-		builder.field("id", builder.int(.{})),
-		builder.field("name", builder.string(.{.min = 4})),
-	}, .{.remove_unknown = true});
-
-	const out = object_validator.validateJsonS("{\"f\": 32.2, \"id\":4, \"name\": \"abcd\", \"other\": true}", &context).ok;
-	const keys = out.root.keys();
-	try t.expectEqual(@as(usize, 2), keys.len);
-	try t.expectString("name", keys[0]);
-	try t.expectString("id", keys[1]);
-}
-
 fn testObjectChangeValue(value: ?[]const u8, ctx: *Context(void)) !?[]const u8 {
-	std.debug.assert(ctx.object.int("c").? == 33);
+	std.debug.assert(ctx.object.get(i64, "c").? == 33);
 
 	if (value.?[0] == '!') {
 		return "abc";
 	}
-	return null;
+	return value;
 }

@@ -14,11 +14,8 @@ const InvalidExpectation = struct {
 };
 
 pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
-	return expectInvalidErrors(e, context.errors());
-}
-
-pub fn expectInvalidErrors(e: InvalidExpectation, errors: []v.InvalidField) !void {
 	// We're going to loop through all the errors, looking for the expected one
+	const errors = context.errors();
 	for (errors) |invalid| {
 		if (e.code) |expected_code| {
 			if (invalid.code != expected_code) continue;

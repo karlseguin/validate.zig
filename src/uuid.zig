@@ -1,5 +1,5 @@
 const std = @import("std");
-const t = @import("t.zig");
+const typed = @import("typed");
 
 const v = @import("validate.zig");
 const codes = @import("codes.zig");
@@ -7,7 +7,6 @@ const Builder = @import("builder.zig").Builder;
 const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
 
-const json = std.json;
 const ascii = std.ascii;
 const Allocator = std.mem.Allocator;
 
@@ -89,36 +88,33 @@ pub fn UUID(comptime S: type) type {
 		// part of the Validator interface, but noop for UUID
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
-		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
-			const untyped_value = input orelse {
-				if (self.required) {
-					try context.add(v.required);
-				}
-				return asJsonValue(try self.executeFunction(null, context));
-			};
+		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
+			var string_value: ?[]const u8 = null;
+			if (input) |untyped_value| {
+				string_value = switch (untyped_value) {
+					.string => |s| s,
+					else => {
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					}
+				};
+			}
 
-			const value = switch (untyped_value) {
-				.string => |s| s,
-				else => {
-					try context.add(INVALID_TYPE);
-					return null;
-				}
-			};
-
-			return asJsonValue(try self.validateNonNullString(value, context));
+			if (try self.validate(string_value, context)) |value| {
+				return .{.string = value};
+			}
+			return .{.null = {}};
 		}
 
-		pub fn validateString(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
+		pub fn validate(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
 			const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
+					return null;
 				}
-				return null;
+				return self.executeFunction(null, context);
 			};
-			return self.validateNonNullString(value, context);
-		}
 
-		pub fn validateNonNullString(self: *const Self, value: []const u8, context: *Context(S)) !?[]const u8 {
 			if (value.len != 36 or value[8] != '-' or value[13] != '-' or value[18] != '-' or value[23] != '-') {
 				try context.add(INVALID_TYPE);
 				return null;
@@ -141,35 +137,31 @@ pub fn UUID(comptime S: type) type {
 			if (self.function) |f| {
 				return f(value, context);
 			}
-			return null;
-		}
-
-		fn asJsonValue(optional_value: ?[]const u8) ?json.Value {
-			if (optional_value) |value| return .{.string = value};
-			return null;
+			return value;
 		}
 	};
 }
 
-const nullJson = @as(?json.Value, null);
+const t = @import("t.zig");
+const nullValue = typed.Value{.null = {}};
 test "UUID: required" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	var context = t.context();
 	defer context.deinit(t.allocator);
 
-	var builder = try Builder(void).init(t.allocator);
+	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
 	const notRequired = builder.uuid(.{.required = false, });
 	const required = notRequired.setRequired(true, &builder);
 
 	{
-		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try required.validateValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try notRequired.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -177,28 +169,28 @@ test "UUID: required" {
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
 		const validator = builder.uuid(.{.required = false});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
 
 test "UUID: type" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	var context = t.context();
 	defer context.deinit(t.allocator);
 
-	var builder = try Builder(void).init(t.allocator);
+	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.uuid(.{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 33}, &context));
+	try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 33}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 }
 
 test "UUID: uuid" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	var context = t.context();
 	defer context.deinit(t.allocator);
 
-	var builder = try Builder(void).init(t.allocator);
+	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.uuid(.{});
@@ -214,7 +206,7 @@ test "UUID: uuid" {
 			"01234567-89AB-CDEF-abcd-ef1234567890",
 		};
 		for (valids) |valid| {
-			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = valid}, &context));
+			try t.expectEqual(typed.Value{.string = valid}, try validator.validateValue(.{.string = valid}, &context));
 			try t.expectEqual(true, context.isValid());
 		}
 	}
@@ -222,7 +214,7 @@ test "UUID: uuid" {
 	{
 		// empty
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = ""}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = ""}, &context));
 		try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 	}
 
@@ -239,40 +231,40 @@ test "UUID: uuid" {
 			"0123456-789AB-CDEF-abc-def1234567890", // 4th dash if off
 		};
 		for (invalids) |invalid| {
-			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = invalid}, &context));
+			try t.expectEqual(nullValue, try validator.validateValue(.{.string = invalid}, &context));
 			try t.expectInvalid(.{.code = codes.TYPE_UUID}, context);
 		}
 	}
 }
 
 test "UUID: function" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	var context = t.context();
 	defer context.deinit(t.allocator);
 
-	var builder = try Builder(void).init(t.allocator);
+	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.uuid(.{.function = testUUIDValidator});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "5111DC00-3b3E-445E-BA29-80B46F73D828"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "5111DC00-3b3E-445E-BA29-80B46F73D828"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		try t.expectString("is-null", (try validator.validateJsonValue(null, &context)).?.string);
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectString("FFFFFFFF-FFFF-0000-FFFF-FFFFFFFFFFFF", (try validator.validateJsonValue(.{.string = "00000000-0000-0000-0000-000000000000"}, &context)).?.string);
+		try t.expectEqual(typed.Value{.string = "is-null"}, (try validator.validateValue(null, &context)));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "ffffffff-ffff-ffff-ffff-ffffffffffff"}, &context));
+		try t.expectString("FFFFFFFF-FFFF-0000-FFFF-FFFFFFFFFFFF", (try validator.validateValue(.{.string = "00000000-0000-0000-0000-000000000000"}, &context)).string);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "ffffffff-ffff-ffff-ffff-ffffffffffff"}, &context));
 		try t.expectInvalid(.{.code = 1010, .err = "uuid validation error"}, context);
 	}
 }

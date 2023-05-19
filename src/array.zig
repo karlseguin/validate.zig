@@ -1,7 +1,5 @@
 const std = @import("std");
-const json = std.json;
-
-const t = @import("t.zig");
+const typed = @import("typed");
 
 const v = @import("validate.zig");
 const codes = @import("codes.zig");
@@ -24,7 +22,7 @@ pub fn Array(comptime S: type) type {
 		invalid_min: ?v.Invalid,
 		invalid_max: ?v.Invalid,
 		_validator: ?Validator(S),
-		function: ?*const fn(value: ?json.Array, context: *Context(S)) anyerror!?json.Array,
+		function: ?*const fn(value: ?typed.Array, context: *Context(S)) anyerror!?typed.Array,
 
 		const Self = @This();
 
@@ -32,7 +30,7 @@ pub fn Array(comptime S: type) type {
 			required: bool = false,
 			min: ?usize = null,
 			max: ?usize = null,
-			function: ?*const fn(value: ?json.Array, context: *Context(S)) anyerror!?json.Array = null,
+			function: ?*const fn(value: ?typed.Array, context: *Context(S)) anyerror!?typed.Array = null,
 		};
 
 		pub fn init(allocator: Allocator, item_validator: anytype, config: Config) !Self {
@@ -94,20 +92,31 @@ pub fn Array(comptime S: type) type {
 			}
 		}
 
-		pub fn validateJsonValue(self: *const Self, optional_value: ?json.Value, context: *Context(S)) !?json.Value {
-			const untyped_value = optional_value orelse {
+		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
+			var array_value: ?typed.Array = null;
+			if (input) |untyped_value| {
+				array_value = switch (untyped_value) {
+					.array => |a| a,
+					else => {
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					}
+				};
+			}
+
+			if (try self.validate(array_value, context)) |value| {
+				return .{.array = value};
+			}
+			return .{.null = {}};
+		}
+
+		pub fn validate(self: *const Self, optional_value: ?typed.Array, context: *Context(S)) !?typed.Array {
+			const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
+					return null;
 				}
 				return self.executeFunction(null, context);
-			};
-
-			var value = switch (untyped_value) {
-				.array => |a| a,
-				else => {
-					try context.add(INVALID_TYPE);
-					return null;
-				},
 			};
 
 			const items = value.items;
@@ -133,25 +142,24 @@ pub fn Array(comptime S: type) type {
 				defer context.endArray();
 				for (items, 0..) |item, i| {
 					context.arrayIndex(i);
-					if (try val.validateJsonValue(item, context)) |new_value| {
-						items[i] = new_value;
-					}
+					items[i] = try val.validateValue(item, context);
 				}
 			}
+
 			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?json.Array, context: *Context(S)) !?json.Value {
+		fn executeFunction(self: *const Self, value: ?typed.Array, context: *Context(S)) !?typed.Array {
 			if (self.function) |f| {
-				const transformed = try f(value, context) orelse return null;
-				return json.Value{.array = transformed};
+				return f(value, context);
 			}
-			return null;
+			return value;
 		}
 	};
 }
 
-const nullJson = @as(?json.Value, null);
+const t = @import("t.zig");
+const nullValue = typed.Value{.null = {}};
 test "array: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
 	defer context.deinit(t.allocator);
@@ -161,14 +169,14 @@ test "array: required" {
 
 	{
 		const validator = builder.array(null, .{.required = true});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
 		const validator = builder.array(null, .{.required = false});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -181,7 +189,7 @@ test "array: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.array(null, .{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "Hi"}, &context));
+	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "Hi"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_ARRAY}, context);
 }
 
@@ -198,19 +206,19 @@ test "array: min length" {
 	}, .{});
 
 	{
-		_ = objectValidator.validateJsonS("{\"items\": []}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": []}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MIN}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = objectValidator.validateJsonS("{\"items\": [1]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1]}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MIN}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -228,19 +236,19 @@ test "array: max length" {
 	}, .{});
 
 	{
-		_ = objectValidator.validateJsonS("{\"items\": [1, 2, 3, 4]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 3, 4]}", &context);
 		try t.expectInvalid(.{.code = codes.ARRAY_LEN_MAX}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = objectValidator.validateJsonS("{\"items\": [1, 2, 3]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 3]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		_ = objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2]}", &context);
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -259,7 +267,7 @@ test "array: nested" {
 	}, .{});
 
 	{
-		_ = objectValidator.validateJsonS("{\"items\": [1, 2, 5]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [1, 2, 5]}", &context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.1"}, context);
 	}
@@ -279,14 +287,14 @@ test "array: deeplys nested field name" {
 	const objectValidator = builder.object(&.{builder.field("items", itemsArrayValidator)}, .{});
 
 	{
-		_ = objectValidator.validateJsonS("{\"items\": [{\"fav\": [1,2]}]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [{\"fav\": [1,2]}]}", &context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.0"}, context);
 		try t.expectInvalid(.{.code = codes.INT_MIN, .field = "items.0.fav.1"}, context);
 	}
 
 	{
 		t.reset(&context);
-		_ = objectValidator.validateJsonS("{\"items\": [{}]}", &context);
+		_ = try objectValidator.validateJsonS("{\"items\": [{}]}", &context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "items.0.fav"}, context);
 	}
 }
@@ -305,12 +313,14 @@ test "array: change value" {
 	}, .{});
 
 	{
-		const typed = objectValidator.validateJsonS("{\"items\": [1, 2, -5]}", &context).ok;
+		const to = try objectValidator.validateJsonS("{\"items\": [1, 2, -5]}", &context);
 		try t.expectEqual(true, context.isValid());
-		const items = typed.array("items").?.items;
-		try t.expectEqual(@as(i64, -1), items[0].integer);
-		try t.expectEqual(@as(i64, 2), items[1].integer);
-		try t.expectEqual(@as(i64, -5), items[2].integer);
+
+		const items = to.mustGet(typed.Array, "items").items;
+		std.debug.print("items: {any}\n", .{items});
+		try t.expectEqual(@as(i64, -1), items[0].i64);
+		try t.expectEqual(@as(i64, 2), items[1].i64);
+		try t.expectEqual(@as(i64, -5), items[2].i64);
 	}
 }
 
@@ -327,33 +337,35 @@ test "array: function" {
 	}, .{});
 
 	{
-		const typed = objectValidator.validateJsonS("{\"items\": [2]}", &context).ok;
+		const to = try objectValidator.validateJsonS("{\"items\": [2]}", &context);
 		try t.expectEqual(true, context.isValid());
-		const items = typed.array("items").?.items;
-		try t.expectEqual(@as(i64, 9001), items[0].integer);
+
+		const items = to.get(typed.Array, "items").?.items;
+		try t.expectEqual(@as(i64, 9001), items[0].i64);
 	}
 
 	{
-		const typed = objectValidator.validateJsonS("{\"items\": [2, 3]}", &context).ok;
+		const to = try objectValidator.validateJsonS("{\"items\": [2, 3]}", &context);
 		try t.expectEqual(true, context.isValid());
-		const items = typed.array("items").?.items;
-		try t.expectEqual(@as(i64, 2), items[0].integer);
-		try t.expectEqual(@as(i64, 3), items[1].integer);
+
+		const items = to.get(typed.Array, "items").?.items;
+		try t.expectEqual(@as(i64, 2), items[0].i64);
+		try t.expectEqual(@as(i64, 3), items[1].i64);
 	}
 }
 
 fn testArrayChangeValue(value: ?i64, _: *Context(void)) !?i64 {
 	if (value.? == 1) return -1;
-	return null;
+	return value;
 }
 
-fn testArrayValidator(value: ?json.Array, _: *Context(void)) !?json.Array {
+fn testArrayValidator(value: ?typed.Array, _: *Context(void)) !?typed.Array {
 	const n = value orelse unreachable;
 
 	if (n.items.len == 1) {
-		n.items[0] = .{.integer = 9001};
+		n.items[0] = .{.i64 = 9001};
 		return n;
 	}
 
-	return null;
+	return value;
 }

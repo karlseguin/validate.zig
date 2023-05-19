@@ -1,5 +1,5 @@
 const std = @import("std");
-const t = @import("t.zig");
+const typed = @import("typed");
 const re = @cImport(@cInclude("regez.h"));
 
 const v = @import("validate.zig");
@@ -8,7 +8,6 @@ const Builder = @import("builder.zig").Builder;
 const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
 
-const json = std.json;
 const Allocator = std.mem.Allocator;
 
 const REGEX_T_SIZEOF = re.sizeof_regex_t;
@@ -124,36 +123,33 @@ pub fn String(comptime S: type) type {
 		// part of the Validator interface, but noop for strings
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
-		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
-			const untyped_value = input orelse {
+		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
+			var string_value: ?[]const u8 = null;
+			if (input) |untyped_value| {
+				string_value = switch (untyped_value) {
+					.string => |s| s,
+					else => {
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					}
+				};
+			}
+
+			if (try self.validate(string_value, context)) |value| {
+				return .{.string = value};
+			}
+			return .{.null = {}};
+		}
+
+		pub fn validate(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
+				const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
-				}
-				return asJsonValue(try self.executeFunction(null, context));
-			};
-
-			const value = switch (untyped_value) {
-				.string => |s| s,
-				else => {
-					try context.add(INVALID_TYPE);
 					return null;
 				}
+				return self.executeFunction(null, context);
 			};
 
-			return asJsonValue(try self.validateNonNullString(value, context));
-		}
-
-		pub fn validateString(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
-			const value = optional_value orelse {
-				if (self.required) {
-					try context.add(v.required);
-				}
-				return null;
-			};
-			return self.validateNonNullString(value, context);
-		}
-
-		pub fn validateNonNullString(self: *const Self, value: []const u8, context: *Context(S)) !?[]const u8 {
 			if (self.min) |m| {
 				std.debug.assert(self.invalid_min != null);
 				if (value.len < m) {
@@ -195,12 +191,7 @@ pub fn String(comptime S: type) type {
 			if (self.function) |f| {
 				return f(value, context);
 			}
-			return null;
-		}
-
-		fn asJsonValue(optional_value: ?[]const u8) ?json.Value {
-			if (optional_value) |value| return .{.string = value};
-			return null;
+			return value;
 		}
 	};
 }
@@ -224,7 +215,8 @@ fn allocateRegex(allocator: Allocator, pattern: []const u8) !*re.regex_t {
 	return regex;
 }
 
-const nullJson = @as(?json.Value, null);
+const t = @import("t.zig");
+const nullValue = typed.Value{.null = {}};
 test "string: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
@@ -236,13 +228,13 @@ test "string: required" {
 	const required = notRequired.setRequired(true, &builder);
 
 	{
-		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try required.validateValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try notRequired.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -250,7 +242,7 @@ test "string: required" {
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
 		const validator = builder.string(.{.required = false});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -263,7 +255,7 @@ test "string: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.string(.{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 33}, &context));
+	try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 33}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_STRING}, context);
 }
 
@@ -276,25 +268,25 @@ test "string: min length" {
 
 	const validator = builder.string(.{.min = 4});
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "abc"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "abc"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 4, .err = "must have at least 4 characters"}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "abcd"}, &context));
+		try t.expectEqual(typed.Value{.string = "abcd"}, try validator.validateValue(.{.string = "abcd"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "abcde"}, &context));
+		try t.expectEqual(typed.Value{.string = "abcde"}, try validator.validateValue(.{.string = "abcde"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	const singular = builder.string(.{.min = 1});
 	{
-		try t.expectEqual(nullJson, try singular.validateJsonValue(.{.string = ""}, &context));
+		try t.expectEqual(nullValue, try singular.validateValue(.{.string = ""}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 1, .err = "must have at least 1 character"}, context);
 	}
 }
@@ -309,25 +301,25 @@ test "string: max length" {
 	const validator = builder.string(.{.max = 4});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "abcde"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "abcde"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 4, .err = "must have no more than 4 characters"}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "abcd"}, &context));
+		try t.expectEqual(typed.Value{.string = "abcd"}, try validator.validateValue(.{.string = "abcd"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "abc"}, &context));
+		try t.expectEqual(typed.Value{.string = "abc"}, try validator.validateValue(.{.string = "abc"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	const singular = builder.string(.{.max = 1});
 	{
-		try t.expectEqual(nullJson, try singular.validateJsonValue(.{.string = "123"}, &context));
+		try t.expectEqual(nullValue, try singular.validateValue(.{.string = "123"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 1, .err = "must have no more than 1 character"}, context);
 	}
 }
@@ -342,24 +334,24 @@ test "string: choices" {
 	const validator = builder.string(.{.choices = &.{"one", "two", "three"}});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "nope"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "nope"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_CHOICE}, context);
 
 
 		{
 			t.reset(&context);
-			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "two"}, &context));
+			try t.expectString("two", (try validator.validateValue(.{.string = "two"}, &context)).string);
 			try t.expectEqual(true, context.isValid());
 		}
 		{
 			t.reset(&context);
-			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "three"}, &context));
+			try t.expectString("three", (try validator.validateValue(.{.string = "three"}, &context)).string);
 			try t.expectEqual(true, context.isValid());
 		}
 
 		{
 			t.reset(&context);
-			try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "one"}, &context));
+			try t.expectString("one", (try validator.validateValue(.{.string = "one"}, &context)).string);
 			try t.expectEqual(true, context.isValid());
 		}
 	}
@@ -384,12 +376,12 @@ test "string: choices" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator2.validateJsonValue(.{.string = "nope"}, &context));
+		try t.expectEqual(nullValue, try validator2.validateValue(.{.string = "nope"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_CHOICE}, context);
 	}
 
 	t.reset(&context);
-	try t.expectEqual(nullJson, try validator2.validateJsonValue(.{.string = "hello"}, &context));
+	try t.expectEqual(typed.Value{.string = "hello"}, try validator2.validateValue(.{.string = "hello"}, &context));
 	try t.expectEqual(true, context.isValid());
 }
 
@@ -403,24 +395,24 @@ test "string: function" {
 	const validator = builder.string(.{.function = testStringValidator});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "ok"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "ok"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		try t.expectString("is-null", (try validator.validateJsonValue(null, &context)).?.string);
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectString("19", (try validator.validateJsonValue(.{.string = "change"}, &context)).?.string);
+		try t.expectString("is-null", (try validator.validateValue(null, &context)).string);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "fail"}, &context));
+		try t.expectString("19", (try validator.validateValue(.{.string = "change"}, &context)).string);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "fail"}, &context));
 		try t.expectInvalid(.{.code = 999, .err = "string validation error"}, context);
 	}
 }
@@ -435,22 +427,22 @@ test "string: pattern" {
 	const validator = builder.string(.{.pattern = "[ab]c"});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "ac"}, &context));
+		try t.expectEqual(typed.Value{.string = "ac"}, try validator.validateValue(.{.string = "ac"}, &context));
 		try t.expectEqual(true, context.isValid());
 
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "bc"}, &context));
+		try t.expectEqual(typed.Value{.string = "bc"}, try validator.validateValue(.{.string = "bc"}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "AZ"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "AZ"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data_pattern = "[ab]c"}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "Ac"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "Ac"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data_pattern = "[ab]c"}, context);
 	}
 }

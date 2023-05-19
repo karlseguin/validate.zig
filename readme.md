@@ -67,7 +67,7 @@ switch (movieValidator.validateJsonS(jsonData, &context)) {
     }
 }
 
-// On success, validateJsonS returns a thin wrapper around std.json.Value
+// On success, validateJsonS returns a thin wrapper around std.typed.Value
 // which lets us get values:
 
 const title = movie.string("title").?
@@ -142,7 +142,7 @@ Some errors also have a `data` object. The inclusion and structure of the `data`
 Between the `code`, `data` and `field` fields, developers should be able to programmatically consume and customize the errors.
 
 ## Typed
-Validation of data happens by calling `validateJsonS` on an `object` validator. This function returns a `validate.Typed` instance which is a thin wrapper around `std.json.Value`.
+Validation of data happens by calling `validateJsonS` on an `object` validator. This function returns a `validate.Typed` instance which is a thin wrapper around `std.typed.Value`.
 
 The goal of `validate.Typed` is to provide a user-friendly API to extract the input data safely.
 
@@ -197,7 +197,7 @@ const age_validator = builder.int(.{
 
 In rare cases (e.g. OOM) `builder.int` can panic. `builder.tryInt` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### Float Validator
 A float validator is created via the `builder.float` function. This function takes a configuration structure. The full possible configuration, with default values, is show below:
@@ -228,7 +228,7 @@ const rating_validator = builder.float(.{
 
 In rare cases (e.g. OOM) `builder.float` can panic. `builder.tryFloat` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### Bool Validator
 A bool validator is created via the `builder.bool` function. This function takes a configuration structure. The full possible configuration, with default values, is show below:
@@ -251,7 +251,7 @@ const enabled_validator = builder.boolean(.{
 
 In rare cases (e.g. OOM) `builder.bool` can panic. `builder.tryBool` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### String Validator
 A string validator is created via the `builder.string` function. This function takes a configuration structure. The full possible configuration, with default values, is show below:
@@ -281,7 +281,7 @@ const name_validator = builder.string(.{
 
 In rare cases (e.g. OOM) `builder.string` can panic. `builder.tryString` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### UUID Validator
 A UUID validator is created via the `builder.uuid` function. This function takes a configuration structure. The full possible configuration, with default values, is show below:
@@ -299,7 +299,7 @@ const name_validator = builder.string(.{
 
 In rare cases (e.g. OOM) `builder.uuid` can panic. `builder.tryUuid` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### Any Validator
 A type-less validator is created via `builder.any` function. Unlike all other validators, this validator does not validate the type of the value. This validator is useful when the type of a field is only known at runtime and a custom validation function is used.
@@ -313,13 +313,13 @@ const default_validator = builder.any(.{
 
     // a custom validation function that will receive the value to validate
     // along with a validation.Context.
-    function: ?*const fn(value: ?[]json.Value, context: *Context(S)) anyerror!?json.Value = null,
+    function: ?*const fn(value: ?[]typed.Value, context: *Context(S)) anyerror!?typed.Value = null,
 });
 ```
 
 In rare cases (e.g. OOM) `builder.any` can panic. `builder.tryAny` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### Array Validator
 An array validator is created via the `builder.array` function. The array validator can validate the array itself (e.g. it's length) as well as each item within in. As such, this function takes both an optional validator to apply to the array values, as well as a configuration structure. The full possible configuration, with default values, is show below:
@@ -346,7 +346,7 @@ const names_validator = builder.array(name_validator, .{
 
 In rare cases (e.g. OOM) `builder.array` can panic. `builder.tryArray` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.json.Value` and a validation Context.
+Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### Object Validator
 The object validator is similar but also different from the others. Like the other validators, it's created via the `builder.object` function. And, like the other validators, it takes a configuration object that defines how the object value itself should be validated.
@@ -369,7 +369,7 @@ var user_validator = builder.object(name_validator, &.{
 
 In rare cases (e.g. OOM) `builder.object` can panic. `builder.tryObject` function can be used to return an ErrorSet which can be caught/unwrapped/propagated.
 
-One created, either `validateJsonS` or `validateJsonV` are used to kick-off validation. `validateJsonS` takes a `[]const u8`. `validateJsonV` takes an `?std.json.Value`.
+One created, either `validateJsonS` or `validateJsonV` are used to kick-off validation. `validateJsonS` takes a `[]const u8`. `validateJsonV` takes an `?std.typed.Value`.
 
 These return a `validate.Result` which is a tagged union:
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const typed = @import("typed");
 
 pub const Pool = @import("pool.zig").Pool;
 pub const Config = @import("pool.zig").Config;
@@ -12,7 +13,6 @@ pub const Bool = @import("bool.zig").Bool;
 pub const UUID = @import("uuid.zig").UUID;
 pub const Float = @import("float.zig").Float;
 pub const Array = @import("array.zig").Array;
-pub const Typed = @import("typed.zig").Typed;
 pub const String = @import("string.zig").String;
 pub const Object = @import("object.zig").Object;
 pub const codes = @import("codes.zig");
@@ -50,7 +50,7 @@ pub const InvalidData = union(InvalidDataType) {
 	choice: Choice,
 	pattern: Pattern,
 	details: Details, // generic string to be used by applications
-	generic: std.json.Value, // generic, anything that std.json.ObjectMap can represent
+	generic: std.json.Value, // generic, anything that std.json.Value can represent
 
 	pub fn jsonStringify(self: InvalidData, options: std.json.StringifyOptions, out: anytype) !void {
 		switch (self) {
@@ -91,8 +91,6 @@ pub const required = Invalid{
 	.code = codes.REQUIRED,
 	.err = "is required",
 };
-
-pub const empty = Typed{.root = std.json.ObjectMap.init(undefined)};
 
 pub fn simpleField(name: []const u8) Field {
 	return .{

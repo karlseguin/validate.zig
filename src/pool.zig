@@ -1,7 +1,7 @@
 const std = @import("std");
 const t = @import("t.zig");
 const v = @import("validate.zig");
-const Typed = @import("typed.zig").Typed;
+const Object = @import("typed").Object;
 
 const Allocator = std.mem.Allocator;
 pub const Config = struct{
@@ -103,7 +103,7 @@ pub fn Pool(comptime S: type) type {
 			context.field = null;
 			context._error_len = 0;
 			context._nesting_idx = null;
-			context.object = Typed.empty;
+			context.object = Object.init(undefined);
 			_ = context._arena.reset(.free_all);
 		}
 	};

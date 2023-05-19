@@ -1,5 +1,5 @@
 const std = @import("std");
-const t = @import("t.zig");
+const typed = @import("typed");
 
 const v = @import("validate.zig");
 const codes = @import("codes.zig");
@@ -7,7 +7,6 @@ const Builder = @import("builder.zig").Builder;
 const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
 
-const json = std.json;
 const Allocator = std.mem.Allocator;
 
 const INVALID_TYPE = v.Invalid{
@@ -82,33 +81,48 @@ pub fn Int(comptime S: type) type {
 		// part of the Validator interface, but noop for ints
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
-		pub fn validateJsonValue(self: *const Self, input: ?json.Value, context: *Context(S)) !?json.Value {
-			const untyped_value = input orelse {
+		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
+			var int_value: ?i64 = null;
+			if (input) |untyped_value| {
+				int_value = switch (untyped_value) {
+					.i64 => |n| @intCast(i64, n),
+					.i8 => |n| @intCast(i64, n),
+					.i16 => |n| @intCast(i64, n),
+					.i32 => |n| @intCast(i64, n),
+					.u8 => |n| @intCast(i64, n),
+					.u16 => |n| @intCast(i64, n),
+					.u32 => |n| @intCast(i64, n),
+					.string => |s| blk: {
+						if (self.parse) {
+							const val = std.fmt.parseInt(i64, s, 10) catch {
+								try context.add(INVALID_TYPE);
+								return .{.null = {}};
+							};
+							break :blk val;
+						}
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					},
+					else => {
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					}
+				};
+			}
+
+			if (try self.validate(int_value, context)) |value| {
+				return .{.i64 = value};
+			}
+			return .{.null = {}};
+		}
+
+		pub fn validate(self: *const Self, optional_value: ?i64, context: *Context(S)) !?i64 {
+			const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
+					return null;
 				}
 				return self.executeFunction(null, context);
-			};
-
-			var parsed = false;
-			const value = switch (untyped_value) {
-				.integer => |n| n,
-				.string => |s| blk: {
-					if (self.parse) {
-						const val = std.fmt.parseInt(i64, s, 10) catch {
-							try context.add(INVALID_TYPE);
-							return null;
-						};
-						parsed = true;
-						break :blk val;
-					}
-					try context.add(INVALID_TYPE);
-					return null;
-				},
-				else => {
-					try context.add(INVALID_TYPE);
-					return null;
-				}
 			};
 
 			if (self.min) |m| {
@@ -127,28 +141,20 @@ pub fn Int(comptime S: type) type {
 				}
 			}
 
-			if (try self.executeFunction(value, context)) |val| {
-				return val;
-			}
-
-			if (parsed) {
-				return .{.integer = value};
-			}
-
-			return null;
+			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?i64, context: *Context(S)) !?json.Value {
+		fn executeFunction(self: *const Self, value: ?i64, context: *Context(S)) !?i64 {
 			if (self.function) |f| {
-				const transformed = try f(value, context) orelse return null;
-				return .{.integer = transformed};
+				return f(value, context);
 			}
-			return null;
+			return value;
 		}
 	};
 }
 
-const nullJson = @as(?json.Value, null);
+const t = @import("t.zig");
+const nullValue = typed.Value{.null = {}};
 test "int: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
@@ -160,13 +166,13 @@ test "int: required" {
 	const required = notRequired.setRequired(true, &builder);
 
 	{
-		try t.expectEqual(nullJson, try required.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try required.validateValue(null, &context));
 		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try notRequired.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
@@ -174,7 +180,7 @@ test "int: required" {
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
 		const validator = builder.int(.{.required = false});
-		try t.expectEqual(nullJson, try validator.validateJsonValue(null, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -187,7 +193,7 @@ test "int: type" {
 	defer builder.deinit(t.allocator);
 
 	const validator = builder.int(.{});
-	try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "NOPE"}, &context));
+	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "NOPE"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_INT}, context);
 }
 
@@ -200,19 +206,19 @@ test "int: min" {
 
 	const validator = builder.int(.{.min = 4});
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 3}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 3}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MIN, .data_min = 4}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 4}, &context));
+		try t.expectEqual(typed.Value{.i64 = 4}, try validator.validateValue(.{.i64 = 4}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 100}, &context));
+		try t.expectEqual(typed.Value{.i64 = 100}, try validator.validateValue(.{.i64 = 100}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -227,19 +233,19 @@ test "int: max" {
 	const validator = builder.int(.{.max = 4});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 5}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 5}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 4}, &context));
+		try t.expectEqual(typed.Value{.i64 = 4}, try validator.validateValue(.{.i64 = 4}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = -30}, &context));
+		try t.expectEqual(typed.Value{.i64 = -30}, try validator.validateValue(.{.i64 = -30}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
@@ -254,24 +260,24 @@ test "int: function" {
 	const validator = builder.int(.{.function = testIntValidator});
 
 	{
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 99}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 99}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
-		try t.expectEqual(@as(i64, -9999), (try validator.validateJsonValue(null, &context)).?.integer);
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectEqual(@as(i64, -38291), (try validator.validateJsonValue(.{.integer = 2}, &context)).?.integer);
+		try t.expectEqual(@as(i64, -9999), (try validator.validateValue(null, &context)).i64);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 3}, &context));
+		try t.expectEqual(@as(i64, -38291), (try validator.validateValue(.{.i64 = 2}, &context)).i64);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 3}, &context));
 		try t.expectInvalid(.{.code = 998, .err = "int validation error"}, context);
 	}
 }
@@ -287,21 +293,21 @@ test "int: parse" {
 
 	{
 		// still works fine with correct type
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.integer = 5}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 5}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
 	}
 
 	{
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(nullJson, try validator.validateJsonValue(.{.string = "5"}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "5"}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
 	}
 
 	{
 		// parses a string and returns the typed value
 		t.reset(&context);
-		try t.expectEqual(@as(i64, 3), (try validator.validateJsonValue(.{.string = "3"}, &context)).?.integer);
+		try t.expectEqual(@as(i64, 3), (try validator.validateValue(.{.string = "3"}, &context)).i64);
 		try t.expectEqual(true, context.isValid());
 	}
 }
