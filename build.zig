@@ -8,12 +8,10 @@ pub fn build(b: *std.Build) !void {
 		.source_file = .{ .path = "src/validate.zig" },
 	});
 
-	const typed_pkg = b.dependency("typed", .{
+	const typed_module =  b.dependency("typed", .{
 		.target = target,
 		.optimize = optimize,
-	});
-
-	const typed_module = typed_pkg.module("typed");
+	}).module("typed");
 
 	const lib_test = b.addTest(.{
 		.root_source_file = .{ .path = "src/validate.zig" },
@@ -23,6 +21,7 @@ pub fn build(b: *std.Build) !void {
 
 	lib_test.addModule("typed", typed_module);
 	lib_test.addIncludePath("lib/regez");
+
 	const run_test = b.addRunArtifact(lib_test);
 	run_test.has_side_effects = true;
 
