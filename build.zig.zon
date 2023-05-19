@@ -1,0 +1,10 @@
+.{
+	.name = "validate.zig",
+	.version = "0.0.0",
+	.dependencies = .{
+		.typed = .{
+			.url = "https://github.com/karlseguin/typed.zig/archive/f5452cd00ce4eba78c6e96e1b8c63ad28720edda.tar.gz",
+			.hash = "1220b58e44bca754193368c7a2783bc012850d534b369a90887a5b0690ff2ce210cf"
+		}
+	},
+}
