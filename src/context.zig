@@ -2,7 +2,7 @@ const std = @import("std");
 const t = @import("t.zig");
 const v = @import("validate.zig");
 
-const Object = @import("typed").Object;
+const Map = @import("typed").Map;
 const Field = @import("object.zig").Field;
 
 const Allocator = std.mem.Allocator;
@@ -17,7 +17,7 @@ pub fn Context(comptime S: type) type {
 		_nesting_idx: ?u8,
 		_from_pool: bool,
 		state: S,
-		object: Object,
+		object: Map,
 		field: ?Field,
 		allocator: Allocator,
 
@@ -54,7 +54,7 @@ pub fn Context(comptime S: type) type {
 				.state = state,
 				.field = null,
 				.allocator = aa,
-				.object = Object.init(undefined),
+				.object = Map.readonlyEmpty(),
 				._arena = arena,
 				._error_len = 0,
 				._nesting_idx = null,

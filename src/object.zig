@@ -45,14 +45,14 @@ pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
 		fields: std.StringHashMap(FieldValidator(S)),
-		function: ?*const fn(value: ?typed.Object, context: *Context(S)) anyerror!?typed.Object,
+		function: ?*const fn(value: ?typed.Map, context: *Context(S)) anyerror!?typed.Map,
 
 		const Self = @This();
 
 		pub const Config = struct {
 			required: bool = false,
 			nest: ?[]const []const u8 = null,
-			function: ?*const fn(value: ?typed.Object, context: *Context(S)) anyerror!?typed.Object = null,
+			function: ?*const fn(value: ?typed.Map, context: *Context(S)) anyerror!?typed.Map = null,
 		};
 
 		pub fn init(_: Allocator, fields: std.StringHashMap(FieldValidator(S)), config: Config) !Self {
@@ -89,7 +89,7 @@ pub fn Object(comptime S: type) type {
 			}
 		}
 
-		pub fn validateJsonS(self: *Self, data: []const u8, context: *Context(S)) !typed.Object {
+		pub fn validateJsonS(self: *Self, data: []const u8, context: *Context(S)) !typed.Map {
 			const allocator = context.allocator; // an arena allocator
 			var parser = std.json.Parser.init(allocator, .alloc_always);
 			defer parser.deinit();
@@ -99,7 +99,7 @@ pub fn Object(comptime S: type) type {
 			return self.validateJsonV(tree.root, context);
 		}
 
-		pub fn validateJsonV(self: *Self, optional_json_value: ?std.json.Value, context: *Context(S)) !typed.Object {
+		pub fn validateJsonV(self: *Self, optional_json_value: ?std.json.Value, context: *Context(S)) !typed.Map {
 			var typed_value: ?typed.Value = null;
 			if (optional_json_value) |json_value| {
 				typed_value = switch (json_value) {
@@ -107,23 +107,23 @@ pub fn Object(comptime S: type) type {
 					.object => try typed.fromJson(context.allocator, json_value),
 					else => {
 						try context.add(INVALID_TYPE);
-						return typed.Object.readonlyEmpty();
+						return typed.Map.readonlyEmpty();
 					}
 				};
 			}
 
 			return switch (try self.validateValue(typed_value, context)) {
-				.null => typed.Object.readonlyEmpty(),
-				.object => |obj| obj,
+				.null => typed.Map.readonlyEmpty(),
+				.map => |map| map,
 				else => unreachable,
 			};
 		}
 
 		pub fn validateValue(self: *const Self, optional_value: ?typed.Value, context: *Context(S)) !typed.Value {
-			var object_value: ?typed.Object = null;
+			var map_value: ?typed.Map = null;
 			if (optional_value) |untyped_value| {
-				object_value = switch (untyped_value) {
-					.object => |obj| obj,
+				map_value = switch (untyped_value) {
+					.map => |map| map,
 					else => {
 						try context.add(INVALID_TYPE);
 						return .{.null = {}};
@@ -131,13 +131,13 @@ pub fn Object(comptime S: type) type {
 				};
 			}
 
-			if (try self.validate(object_value, context)) |value| {
-				return .{.object = value};
+			if (try self.validate(map_value, context)) |value| {
+				return .{.map = value};
 			}
 			return .{.null = {}};
 		}
 
-		pub fn validate(self: *const Self, optional_value: ?typed.Object, context: *Context(S)) !?typed.Object {
+		pub fn validate(self: *const Self, optional_value: ?typed.Map, context: *Context(S)) !?typed.Map {
 			var value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
@@ -155,7 +155,7 @@ pub fn Object(comptime S: type) type {
 				context.field = f;
 				const name = f.name;
 
-				if (value.map.getEntry(name)) |entry| {
+				if (value.m.getEntry(name)) |entry| {
 					entry.value_ptr.* = try fv.validator.validateValue(entry.value_ptr.*, context);
 				} else {
 					try value.put(name, try fv.validator.validateValue(null, context));
@@ -165,7 +165,7 @@ pub fn Object(comptime S: type) type {
 			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?typed.Object, context: *Context(S)) !?typed.Object {
+		fn executeFunction(self: *const Self, value: ?typed.Map, context: *Context(S)) !?typed.Map {
 			if (self.function) |f| {
 				return f(value, context);
 			}
@@ -315,7 +315,6 @@ test "object: change value" {
 
 	{
 		const to = try object_validator.validateJsonS("{\"name\": \"normal\", \"c\": 33}", &context);
-		std.debug.print("HERE\n", .{});
 		try t.expectEqual(true, context.isValid());
 		try t.expectString("normal", to.get([]const u8, "name").?);
 	}

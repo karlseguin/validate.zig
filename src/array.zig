@@ -317,7 +317,6 @@ test "array: change value" {
 		try t.expectEqual(true, context.isValid());
 
 		const items = to.mustGet(typed.Array, "items").items;
-		std.debug.print("items: {any}\n", .{items});
 		try t.expectEqual(@as(i64, -1), items[0].i64);
 		try t.expectEqual(@as(i64, 2), items[1].i64);
 		try t.expectEqual(@as(i64, -5), items[2].i64);
