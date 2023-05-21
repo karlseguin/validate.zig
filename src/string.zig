@@ -1,12 +1,13 @@
 const std = @import("std");
 const typed = @import("typed");
+const v = @import("validate.zig");
 const re = @cImport(@cInclude("regez.h"));
 
-const v = @import("validate.zig");
-const codes = @import("codes.zig");
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
-const Validator = @import("validator.zig").Validator;
+const codes = v.codes;
+const Builder = v.Builder;
+const Context = v.Context;
+const Validator = v.Validator;
+const DataBuilder = v.DataBuilder;
 
 const Allocator = std.mem.Allocator;
 
@@ -48,7 +49,7 @@ pub fn String(comptime S: type) type {
 				const plural = if (m == 1) "" else "s";
 				invalid_min = v.Invalid{
 					.code = codes.STRING_LEN_MIN,
-					.data = .{.imin = .{.min = @intCast(i64, m) }},
+					.data = try DataBuilder.init(allocator).put("min", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "must have at least {d} character{s}", .{m, plural}),
 				};
 			}
@@ -58,7 +59,7 @@ pub fn String(comptime S: type) type {
 				const plural = if (m == 1) "" else "s";
 				invalid_max = v.Invalid{
 					.code = codes.STRING_LEN_MAX,
-					.data = .{.imax = .{.max = @intCast(i64, m) }},
+					.data = try DataBuilder.init(allocator).put("max", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "must have no more than {d} character{s}", .{m, plural}),
 				};
 			}
@@ -66,17 +67,21 @@ pub fn String(comptime S: type) type {
 			var invalid_choices: ?v.Invalid = null;
 			var owned_choices: ?[][]const u8 = null;
 			if (config.choices) |choices| {
+				var choice_data = typed.Array.init(allocator);
+				try choice_data.ensureTotalCapacity(choices.len);
+
 				var owned = try allocator.alloc([]u8, choices.len);
 				for (choices, 0..) |choice, i| {
 					owned[i] = try allocator.alloc(u8, choice.len);
 					std.mem.copy(u8, owned[i], choice);
+					choice_data.appendAssumeCapacity(.{.string = owned[i]});
 				}
 				owned_choices = owned;
 
 				const choice_list = try std.mem.join(allocator, ", ", owned);
 				invalid_choices = v.Invalid{
 					.code = codes.STRING_CHOICE,
-					.data = .{.choice = .{.valid = owned}},
+					.data = try DataBuilder.init(allocator).put("valid", choice_data).done(),
 					.err = try std.fmt.allocPrint(allocator, "must be one of: {s}", .{choice_list}),
 				};
 			}
@@ -88,7 +93,7 @@ pub fn String(comptime S: type) type {
 				invalid_pattern = v.Invalid{
 					.err = "is not valid",
 					.code = codes.STRING_PATTERN,
-					.data = .{.pattern = .{.pattern = pattern}},
+					.data = try DataBuilder.init(allocator).put("pattern", pattern).done(),
 				};
 			}
 
@@ -269,7 +274,7 @@ test "string: min length" {
 	const validator = builder.string(.{.min = 4});
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "abc"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 4, .err = "must have at least 4 characters"}, context);
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data = .{.min = 4}, .err = "must have at least 4 characters"}, context);
 	}
 
 	{
@@ -287,7 +292,7 @@ test "string: min length" {
 	const singular = builder.string(.{.min = 1});
 	{
 		try t.expectEqual(nullValue, try singular.validateValue(.{.string = ""}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data_min = 1, .err = "must have at least 1 character"}, context);
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data = .{.min = 1}, .err = "must have at least 1 character"}, context);
 	}
 }
 
@@ -302,7 +307,7 @@ test "string: max length" {
 
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "abcde"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 4, .err = "must have no more than 4 characters"}, context);
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data = .{.max = 4}, .err = "must have no more than 4 characters"}, context);
 	}
 
 	{
@@ -320,7 +325,7 @@ test "string: max length" {
 	const singular = builder.string(.{.max = 1});
 	{
 		try t.expectEqual(nullValue, try singular.validateValue(.{.string = "123"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data_max = 1, .err = "must have no more than 1 character"}, context);
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data = .{.max = 1}, .err = "must have no more than 1 character"}, context);
 	}
 }
 
@@ -335,7 +340,7 @@ test "string: choices" {
 
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "nope"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_CHOICE}, context);
+		try t.expectInvalid(.{.code = codes.STRING_CHOICE, .data = .{.valid = &.{"one", "two", "three"}}}, context);
 
 
 		{
@@ -437,13 +442,13 @@ test "string: pattern" {
 	{
 		t.reset(&context);
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "AZ"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data_pattern = "[ab]c"}, context);
+		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data = .{.pattern = "[ab]c"}}, context);
 	}
 
 	{
 		t.reset(&context);
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "Ac"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data_pattern = "[ab]c"}, context);
+		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data = .{.pattern = "[ab]c"}}, context);
 	}
 }
 

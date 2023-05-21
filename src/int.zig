@@ -1,11 +1,12 @@
 const std = @import("std");
 const typed = @import("typed");
-
 const v = @import("validate.zig");
-const codes = @import("codes.zig");
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
-const Validator = @import("validator.zig").Validator;
+
+const codes = v.codes;
+const Builder = v.Builder;
+const Context = v.Context;
+const Validator = v.Validator;
+const DataBuilder = v.DataBuilder;
 
 const Allocator = std.mem.Allocator;
 
@@ -14,24 +15,32 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be an int",
 };
 
-pub fn Int(comptime S: type) type {
+pub fn Int(comptime T: type, comptime S: type) type {
+	if (@typeInfo(T) != .Int) {
+		@compileError(@typeName(T) ++ " is not an integer");
+	}
+	if (@typeInfo(T).Int.bits > 128) {
+		@compileError("int validator does not support integers wider than 128 bits");
+	}
+
 	return struct {
 		required: bool,
-		min: ?i64,
-		max: ?i64,
+		min: ?T,
+		max: ?T,
 		parse: bool,
+		bit_invalid: v.Invalid,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
-		function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64,
+		function: ?*const fn(value: ?T, context: *Context(S)) anyerror!?T,
 
 		const Self = @This();
 
 		pub const Config = struct {
-			min: ?i64 = null,
-			max: ?i64 = null,
+			min: ?T = null,
+			max: ?T = null,
 			parse: bool = false,
 			required: bool = false,
-			function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64 = null,
+			function: ?*const fn(value: ?T, context: *Context(S)) anyerror!?T = null,
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
@@ -39,7 +48,7 @@ pub fn Int(comptime S: type) type {
 			if (config.min) |m| {
 				min_invalid = v.Invalid{
 					.code = codes.INT_MIN,
-					.data = .{.imin = .{.min = m }},
+					.data = try DataBuilder.init(allocator).put("min", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "cannot be less than {d}", .{m}),
 				};
 			}
@@ -48,10 +57,16 @@ pub fn Int(comptime S: type) type {
 			if (config.max) |m| {
 				max_invalid = v.Invalid{
 					.code = codes.INT_MAX,
-					.data = .{.imax = .{.max = m }},
+					.data = try DataBuilder.init(allocator).put("max", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "cannot be greater than {d}", .{m}),
 				};
 			}
+
+			const bit_invalid = v.Invalid{
+				.code = codes.INT_BIT,
+				.data = try DataBuilder.init(allocator).put("type", @typeName(T)).done(),
+				.err = try std.fmt.allocPrint(allocator, "is not a valid integer type", .{}),
+			};
 
 			return .{
 				.min = config.min,
@@ -59,6 +74,7 @@ pub fn Int(comptime S: type) type {
 				.parse = config.parse,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
+				.bit_invalid = bit_invalid,
 				.required = config.required,
 				.function = config.function,
 			};
@@ -68,13 +84,13 @@ pub fn Int(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*Int(S) {
-			var clone = try builder.allocator.create(Int(S));
+		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*Int(T, S) {
+			var clone = try builder.allocator.create(Int(T, S));
 			clone.* = self.*;
 			clone.required = req;
 			return clone;
 		}
-		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *Int(S) {
+		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *Int(T, S) {
 			return self.trySetRequired(req, builder) catch unreachable;
 		}
 
@@ -82,41 +98,111 @@ pub fn Int(comptime S: type) type {
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
 		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
-			var int_value: ?i64 = null;
+			var int_value: ?T = null;
 			if (input) |untyped_value| {
-				int_value = switch (untyped_value) {
-					.i64 => |n| @intCast(i64, n),
-					.i8 => |n| @intCast(i64, n),
-					.i16 => |n| @intCast(i64, n),
-					.i32 => |n| @intCast(i64, n),
-					.u8 => |n| @intCast(i64, n),
-					.u16 => |n| @intCast(i64, n),
-					.u32 => |n| @intCast(i64, n),
+				const ti = @typeInfo(T).Int;
+				const bits = ti.bits;
+				const signed = ti.signedness == .signed;
+
+				var valid = false;
+
+				switch (untyped_value) {
+					.i64 => |n| {
+						if (signed and bits >= 64) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.i32 => |n| {
+						if (signed and bits >= 32) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.i16 => |n| {
+						if (signed and bits >= 16) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.i8 => |n| {
+						if (signed and bits >= 8){
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.u64 => |n| {
+						if ((!signed and bits >= 64) or (signed and bits > 64)) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.u32 => |n| {
+						if ((!signed and bits >= 32) or (signed and bits > 32)) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.u16 => |n| {
+						if ((!signed and bits >= 16) or (signed and bits > 16)) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.u8 => |n| {
+						if ((!signed and bits >= 8) or (signed and bits > 8)) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.i128 => |n| {
+						if (signed and bits >= 128) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
+					.u128 => |n| {
+						if ((!signed and bits >= 128) or (signed and bits > 128)) {
+							int_value = @intCast(T, n);
+							valid = true;
+						}
+					},
 					.string => |s| blk: {
 						if (self.parse) {
-							const val = std.fmt.parseInt(i64, s, 10) catch {
-								try context.add(INVALID_TYPE);
-								return .{.null = {}};
-							};
-							break :blk val;
+							int_value = std.fmt.parseInt(T, s, 10) catch break :blk;
+							valid = true;
 						}
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
 					},
-					else => {
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
+					else => {}
+				}
+
+				if (!valid) {
+					switch (untyped_value) {
+						.i8, .u8, .i16, .u16, .i32, .u32, .i64, .u64, .i128, .u128 => try context.add(self.bit_invalid),
+						else => try context.add(INVALID_TYPE),
 					}
-				};
+					return .{.null = {}};
+				}
 			}
 
 			if (try self.validate(int_value, context)) |value| {
-				return .{.i64 = value};
+				return typed.new(value);
 			}
 			return .{.null = {}};
 		}
 
-		pub fn validate(self: *const Self, optional_value: ?i64, context: *Context(S)) !?i64 {
+		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?T {
+			var int_value: ?T = null;
+			if (input) |string_value| {
+				int_value = std.fmt.parseInt(T, string_value, 10) catch {
+					try context.add(INVALID_TYPE);
+					return null;
+				};
+			}
+			return self.validate(int_value, context);
+		}
+
+		pub fn validate(self: *const Self, optional_value: ?T, context: *Context(S)) !?T {
 			const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
@@ -144,7 +230,7 @@ pub fn Int(comptime S: type) type {
 			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?i64, context: *Context(S)) !?i64 {
+		fn executeFunction(self: *const Self, value: ?T, context: *Context(S)) !?T {
 			if (self.function) |f| {
 				return f(value, context);
 			}
@@ -162,7 +248,7 @@ test "int: required" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.int(.{.required = false, });
+	const notRequired = builder.int(i64, .{.required = false, });
 	const required = notRequired.setRequired(true, &builder);
 
 	{
@@ -179,7 +265,7 @@ test "int: required" {
 	{
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
-		const validator = builder.int(.{.required = false});
+		const validator = builder.int(i64, .{.required = false});
 		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -192,7 +278,7 @@ test "int: type" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.int(.{});
+	const validator = builder.int(i64, .{});
 	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "NOPE"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_INT}, context);
 }
@@ -204,10 +290,10 @@ test "int: min" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.int(.{.min = 4});
+	const validator = builder.int(i64, .{.min = 4});
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 3}, &context));
-		try t.expectInvalid(.{.code = codes.INT_MIN, .data_min = 4}, context);
+		try t.expectInvalid(.{.code = codes.INT_MIN, .data = .{.min = 4}}, context);
 	}
 
 	{
@@ -230,11 +316,11 @@ test "int: max" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.int(.{.max = 4});
+	const validator = builder.int(i64, .{.max = 4});
 
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 5}, &context));
-		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
+		try t.expectInvalid(.{.code = codes.INT_MAX, .data = .{.max = 4}}, context);
 	}
 
 	{
@@ -257,7 +343,7 @@ test "int: function" {
 	const builder = try Builder(i64).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.int(.{.function = testIntValidator});
+	const validator = builder.int(i64, .{.function = testIntValidator});
 
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 99}, &context));
@@ -289,19 +375,19 @@ test "int: parse" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.int(.{.max = 4, .parse = true});
+	const validator = builder.int(i64, .{.max = 4, .parse = true});
 
 	{
 		// still works fine with correct type
 		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = 5}, &context));
-		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
+		try t.expectInvalid(.{.code = codes.INT_MAX, .data = .{.max = 4}}, context);
 	}
 
 	{
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "5"}, &context));
-		try t.expectInvalid(.{.code = codes.INT_MAX, .data_max = 4}, context);
+		try t.expectInvalid(.{.code = codes.INT_MAX, .data = .{.max = 4}}, context);
 	}
 
 	{
@@ -309,6 +395,20 @@ test "int: parse" {
 		t.reset(&context);
 		try t.expectEqual(@as(i64, 3), (try validator.validateValue(.{.string = "3"}, &context)).i64);
 		try t.expectEqual(true, context.isValid());
+	}
+}
+
+test "int: T=u16" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.int(u16, .{.min = 1, .max = 332});
+	{
+		try t.expectEqual(nullValue, try validator.validateValue(.{.u32 = 3}, &context));
+		try t.expectInvalid(.{.code = codes.INT_BIT, .data = .{.type = "u16"}}, context);
 	}
 }
 

@@ -1,11 +1,12 @@
 const std = @import("std");
 const typed = @import("typed");
-
 const v = @import("validate.zig");
-const codes = @import("codes.zig");
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
-const Validator = @import("validator.zig").Validator;
+
+const codes = v.codes;
+const Builder = v.Builder;
+const Context = v.Context;
+const Validator = v.Validator;
+const DataBuilder = v.DataBuilder;
 
 const Allocator = std.mem.Allocator;
 
@@ -14,26 +15,34 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be a float",
 };
 
-pub fn Float(comptime S: type) type {
+pub fn Float(comptime T: type, comptime S: type) type {
+	if (@typeInfo(T) != .Float) {
+		@compileError(@typeName(T) ++ " is not a float");
+	}
+	if (@typeInfo(T).Float.bits > 64) {
+		@compileError("float validator does not support floats wider than 64 bits");
+	}
+
 	return struct {
 		required: bool,
-		min: ?f64,
-		max: ?f64,
+		min: ?T,
+		max: ?T,
 		parse: bool,
 		strict: bool,
+		bit_invalid: v.Invalid,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
-		function: ?*const fn(value: ?f64, context: *Context(S)) anyerror!?f64,
+		function: ?*const fn(value: ?T, context: *Context(S)) anyerror!?T,
 
 		const Self = @This();
 
 		pub const Config = struct {
-			min: ?f64 = null,
-			max: ?f64 = null,
+			min: ?T = null,
+			max: ?T = null,
 			parse: bool = false,
 			strict: bool = false,
 			required: bool = false,
-			function: ?*const fn(value: ?f64, context: *Context(S)) anyerror!?f64 = null,
+			function: ?*const fn(value: ?T, context: *Context(S)) anyerror!?T = null,
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
@@ -41,7 +50,7 @@ pub fn Float(comptime S: type) type {
 			if (config.min) |m| {
 				min_invalid = v.Invalid{
 					.code = codes.FLOAT_MIN,
-					.data = .{.fmin = .{.min = m }},
+					.data = try DataBuilder.init(allocator).put("min", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "cannot be less than {d}", .{m}),
 				};
 			}
@@ -50,16 +59,23 @@ pub fn Float(comptime S: type) type {
 			if (config.max) |m| {
 				max_invalid = v.Invalid{
 					.code = codes.FLOAT_MAX,
-					.data = .{.fmax = .{.max = m }},
+					.data = try DataBuilder.init(allocator).put("max", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "cannot be greater than {d}", .{m}),
 				};
 			}
+
+			const bit_invalid = v.Invalid{
+				.code = codes.INT_BIT,
+				.data = try DataBuilder.init(allocator).put("type", @typeName(T)).done(),
+				.err = try std.fmt.allocPrint(allocator, "is not a valid float type", .{}),
+			};
 
 			return .{
 				.min = config.min,
 				.max = config.max,
 				.parse = config.parse,
 				.strict = config.strict,
+				.bit_invalid = bit_invalid,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
 				.required = config.required,
@@ -71,13 +87,13 @@ pub fn Float(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*Float(S) {
-			var clone = try builder.allocator.create(Float(S));
+		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*Float(T, S) {
+			var clone = try builder.allocator.create(Float(T, S));
 			clone.* = self.*;
 			clone.required = req;
 			return clone;
 		}
-		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *Float(S) {
+		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *Float(T, S) {
 			return self.trySetRequired(req, builder) catch unreachable;
 		}
 
@@ -85,49 +101,106 @@ pub fn Float(comptime S: type) type {
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
 		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
-			var float_value: ?f64 = null;
+			var float_value: ?T = null;
 			if (input) |untyped_value| {
-				float_value = switch (untyped_value) {
-					.f64 => |f| f,
-					.f32 => |f| f,
+				const bits =  @typeInfo(T).Float.bits;
+
+				var valid = false;
+				switch (untyped_value) {
+					.f64 => |f| {
+						if (bits >= 64) {
+							float_value = @floatCast(T, f);
+							valid = true;
+						}
+					},
+					.f32 => |f| {
+						if (bits >= 32) {
+							float_value = @floatCast(T, f);
+							valid = true;
+						}
+					},
 					.string => |s| blk: {
 						if (self.parse) {
-							const val = std.fmt.parseFloat(f64, s) catch {
-								try context.add(INVALID_TYPE);
-								return .{.null = {}};
-							};
-							break :blk val;
+							float_value = std.fmt.parseFloat(T, s) catch break :blk;
+							valid = true;
 						}
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
 					},
-					else => blk: {
+					else => {
 						if (!self.strict) {
 							switch (untyped_value) {
-								.i8 => |n| break :blk @intToFloat(f64, n),
-								.i16 => |n| break :blk @intToFloat(f64, n),
-								.i32 => |n| break :blk @intToFloat(f64, n),
-								.i64 => |n| break :blk @intToFloat(f64, n),
-								.u8 => |n| break :blk @intToFloat(f64, n),
-								.u16 => |n| break :blk @intToFloat(f64, n),
-								.u32 => |n| break :blk @intToFloat(f64, n),
-								.u64 => |n| break :blk @intToFloat(f64, n),
+								.i8 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.i16 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.i32 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.i64 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.i128 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.u8 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.u16 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.u32 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.u64 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
+								.u128 => |n| {
+									float_value = @intToFloat(T, n);
+									valid = true;
+								},
 								else => {},
 							}
 						}
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
 					}
-				};
+				}
+
+				if (!valid) {
+					switch (untyped_value) {
+						.f32, .f64 => try context.add(self.bit_invalid),
+						else => try context.add(INVALID_TYPE),
+					}
+					return .{.null = {}};
+				}
 			}
 
 			if (try self.validate(float_value, context)) |value| {
-				return .{.f64 = value};
+				return typed.new(value);
 			}
 			return .{.null = {}};
 		}
 
-		pub fn validate(self: *const Self, optional_value: ?f64, context: *Context(S)) !?f64 {
+		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?T {
+			var int_value: ?T = null;
+			if (input) |string_value| {
+				int_value = std.fmt.parseFloat(T, string_value,) catch {
+					try context.add(INVALID_TYPE);
+					return null;
+				};
+			}
+			return self.validate(int_value, context);
+		}
+
+		pub fn validate(self: *const Self, optional_value: ?T, context: *Context(S)) !?T {
 			const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
@@ -155,7 +228,7 @@ pub fn Float(comptime S: type) type {
 			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?f64, context: *Context(S)) !?f64 {
+		fn executeFunction(self: *const Self, value: ?T, context: *Context(S)) !?T {
 			if (self.function) |f| {
 				return f(value, context);
 			}
@@ -173,7 +246,7 @@ test "float: required" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.float(.{.required = false, });
+	const notRequired = builder.float(f64, .{.required = false, });
 	const required = notRequired.setRequired(true, &builder);
 
 	{
@@ -190,7 +263,7 @@ test "float: required" {
 	{
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
-		const validator = builder.float(.{.required = false});
+		const validator = builder.float(f64, .{.required = false});
 		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -203,7 +276,7 @@ test "float: type" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.float(.{});
+	const validator = builder.float(f64, .{});
 	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "NOPE"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_FLOAT}, context);
 }
@@ -215,7 +288,7 @@ test "float: strict" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.float(.{.strict = true});
+	const validator = builder.float(f64, .{.strict = true});
 
 	{
 		try t.expectEqual(typed.Value{.f64 = 4.1}, try validator.validateValue(.{.f64 = 4.1}, &context));
@@ -236,7 +309,7 @@ test "float: not strict" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.float(.{});
+	const validator = builder.float(f64, .{});
 
 	{
 		try t.expectEqual(typed.Value{.f64 = 4.1}, try validator.validateValue(.{.f64 = 4.1}, &context));
@@ -257,10 +330,10 @@ test "float: min" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.float(.{.min = 4.2});
+	const validator = builder.float(f64, .{.min = 4.2});
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.f64 = 4.1}, &context));
-		try t.expectInvalid(.{.code = codes.FLOAT_MIN, .data_fmin = 4.2, .err = "cannot be less than 4.2"}, context);
+		try t.expectInvalid(.{.code = codes.FLOAT_MIN, .data = .{.min = 4.2}, .err = "cannot be less than 4.2"}, context);
 	}
 
 	{
@@ -283,11 +356,11 @@ test "float: max" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.float(.{.max = 4.1});
+	const validator = builder.float(f64, .{.max = 4.1});
 
 	{
 		try t.expectEqual(nullValue, (try validator.validateValue(.{.f64 = 4.2}, &context)));
-		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.1}, context);
+		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data = .{.max = 4.1}}, context);
 	}
 
 	{
@@ -310,7 +383,7 @@ test "float: function" {
 	const builder = try Builder(f64).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.float(.{.function = testFloatValidator});
+	const validator = builder.float(f64, .{.function = testFloatValidator});
 
 	{
 		try t.expectEqual(nullValue, try validator.validateValue(.{.f64 = 99.1}, &context));
@@ -342,19 +415,19 @@ test "float: parse" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.float(.{.max = 4.2, .parse = true});
+	const validator = builder.float(f64, .{.max = 4.2, .parse = true});
 
 	{
 		// still works fine with correct type
 		try t.expectEqual(nullValue, try validator.validateValue(.{.f64 = 4.3}, &context));
-		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.2}, context);
+		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data = .{.max = 4.2}}, context);
 	}
 
 	{
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "4.3"}, &context));
-		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data_fmax = 4.2}, context);
+		try t.expectInvalid(.{.code = codes.FLOAT_MAX, .data = .{.max = 4.2}}, context);
 	}
 
 	{

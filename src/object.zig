@@ -1,13 +1,15 @@
 const std = @import("std");
-const json = std.json;
+const typed = @import("typed");
 
 const v = @import("validate.zig");
-const codes = @import("codes.zig");
-const typed = @import("typed");
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
 const Validator = @import("validator.zig").Validator;
 
+const codes = v.codes;
+const Builder = v.Builder;
+const Context = v.Context;
+const DataBuilder = v.DataBuilder;
+
+const json = std.json;
 const Allocator = std.mem.Allocator;
 
 const INVALID_TYPE = v.Invalid{
@@ -245,10 +247,10 @@ test "object: nested" {
 	defer builder.deinit(t.allocator);
 
 	const id_validator = builder.uuid(.{.required = true});
-	const age_validator = builder.int(.{.required = true});
+	const age_validator = builder.int(i64, .{.required = true});
 	const any_validator = builder.any(.{.required = true});
 	const name_validator = builder.string(.{.required = true});
-	const score_validator = builder.float(.{.required = true});
+	const score_validator = builder.float(f64, .{.required = true});
 	const enabled_validator = builder.boolean(.{.required = true});
 	const user_validator = builder.object(&.{
 		builder.field("id", id_validator),
@@ -290,7 +292,7 @@ test "object: forced nesting" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const age_validator = builder.int(.{.required = true});
+	const age_validator = builder.int(i64, .{.required = true});
 	const user_validator = builder.object(&.{
 		builder.field("age", age_validator),
 	}, .{.nest = &[_][]const u8{"user"}});

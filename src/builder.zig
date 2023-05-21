@@ -66,13 +66,13 @@ pub fn Builder(comptime S: type) type {
 			return self.tryAny(config) catch unreachable;
 		}
 
-		pub fn tryInt(self: Self, config: Int(S).Config) !*Int(S) {
-			const val = try self.allocator.create(Int(S));
-			val.* = try Int(S).init(self.allocator, config);
+		pub fn tryInt(self: Self, comptime T: type, config: Int(T, S).Config) !*Int(T, S) {
+			const val = try self.allocator.create(Int(T, S));
+			val.* = try Int(T, S).init(self.allocator, config);
 			return val;
 		}
-		pub fn int(self: Self, config: Int(S).Config) *Int(S) {
-			return self.tryInt(config) catch unreachable;
+		pub fn int(self: Self, comptime T: type, config: Int(T, S).Config) *Int(T, S) {
+			return self.tryInt(T, config) catch unreachable;
 		}
 
 		pub fn tryBoolean(self: Self, config: Bool(S).Config) !*Bool(S) {
@@ -84,13 +84,13 @@ pub fn Builder(comptime S: type) type {
 			return self.tryBoolean(config) catch unreachable;
 		}
 
-		pub fn tryFloat(self: Self, config: Float(S).Config) !*Float(S) {
-			const val = try self.allocator.create(Float(S));
-			val.* = try Float(S).init(self.allocator, config);
+		pub fn tryFloat(self: Self, comptime T: type, config: Float(T, S).Config) !*Float(T, S) {
+			const val = try self.allocator.create(Float(T, S));
+			val.* = try Float(T, S).init(self.allocator, config);
 			return val;
 		}
-		pub fn float(self: Self, config: Float(S).Config) *Float(S) {
-			return self.tryFloat(config) catch unreachable;
+		pub fn float(self: Self, comptime T: type, config: Float(T, S).Config) *Float(T, S) {
+			return self.tryFloat(T, config) catch unreachable;
 		}
 
 		pub fn tryString(self: *Self, config: String(S).Config) !*String(S) {

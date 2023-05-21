@@ -1,97 +1,63 @@
 const std = @import("std");
+const typed = @import("typed");
 const v = @import("validate.zig");
 
-const InvalidExpectation = struct {
-	err: ?[]const u8 = null,
-	code: ?i64 = null,
-	field: ?[]const u8 = null,
-	data_min: ?i64 = null,
-	data_max: ?i64 = null,
-	data_fmin: ?f64 = null,
-	data_fmax: ?f64 = null,
-	data_pattern: ?[]const u8 = null,
-	data_details: ?[]const u8 = null,
-};
+const allocator = std.testing.allocator;
 
-pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
+pub fn expectInvalid(e: anytype, context: anytype) !void {
+	const T = @TypeOf(e);
+	const expected_err: ?[]const u8 = if (@hasField(T, "err")) e.err else null;
+	const expected_code: ?i64 = if (@hasField(T, "code")) e.code else null;
+	const expected_field: ?[]const u8 = if (@hasField(T, "field")) e.field else null;
+	var expected_data: ?[]const u8 = null;
+	if (@hasField(T, "data")) {
+		// we go through all of this so that both actual and expected are serialized
+		// as typed.Value (and thus, serialize the same, e.g. floats use the same
+		// formatting options)
+		var js = try std.json.stringifyAlloc(allocator, e.data, .{});
+		defer allocator.free(js);
+
+		var parser = std.json.Parser.init(allocator, .alloc_always);
+		defer parser.deinit();
+
+		var vt = try parser.parse(js);
+		defer vt.deinit();
+
+		const expected_typed = try typed.fromJson(allocator, vt.root);
+		defer expected_typed.deinit();
+
+		expected_data = try std.json.stringifyAlloc(allocator, expected_typed, .{});
+	}
+
+	defer {
+		if (expected_data) |ed| allocator.free(ed);
+	}
+
 	// We're going to loop through all the errors, looking for the expected one
 	const errors = context.errors();
 	for (errors) |invalid| {
-		if (e.code) |expected_code| {
-			if (invalid.code != expected_code) continue;
+		if (expected_err) |er| {
+			if (!std.mem.eql(u8, er, invalid.err)) continue;
 		}
 
-		if (e.err) |expected_err| {
-			if (!std.mem.eql(u8, expected_err, invalid.err)) continue;
+		if (expected_code) |ec| {
+			if (invalid.code != ec) continue;
 		}
 
-		if (e.field) |expected_field| {
+
+		if (expected_field) |ef| {
 			if (invalid.field) |actual_field| {
-				if (!std.mem.eql(u8, expected_field, actual_field)) continue;
+				if (!std.mem.eql(u8, ef, actual_field)) continue;
 			} else {
 				continue;
 			}
 		}
 
-		if (e.data_min) |expected_min| {
+		if (expected_data) |ed| {
 			if (invalid.data) |actual_data| {
-				switch (actual_data) {
-					.imin => |d| if (d.min != expected_min) continue,
-					else => continue,
-				}
-			} else {
-				continue;
-			}
-		}
-
-		if (e.data_max) |expected_max| {
-			if (invalid.data) |actual_data| {
-				switch (actual_data) {
-					.imax => |d| if (d.max != expected_max) continue,
-					else => continue,
-				}
-			} else {
-				continue;
-			}
-		}
-
-		if (e.data_fmin) |expected_min| {
-			if (invalid.data) |actual_data| {
-				switch (actual_data) {
-					.fmin => |d| if (d.min != expected_min) continue,
-					else => continue,
-				}
-			}
-		}
-
-		if (e.data_fmax) |expected_max| {
-			if (invalid.data) |actual_data| {
-				switch (actual_data) {
-					.fmax => |d| if (d.max != expected_max) continue,
-					else => continue,
-				}
-			} else {
-				continue;
-			}
-		}
-
-		if (e.data_pattern) |expected_pattern| {
-			if (invalid.data) |actual_data| {
-				switch (actual_data) {
-					.pattern => |p| if (!std.mem.eql(u8, p.pattern, expected_pattern)) continue,
-					else => continue,
-				}
-			} else {
-				continue;
-			}
-		}
-
-		if (e.data_details) |expected_details| {
-			if (invalid.data) |actual_data| {
-				switch (actual_data) {
-					.details => |d| if (!std.mem.eql(u8, d.details, expected_details)) continue,
-					else => continue,
-				}
+				const actual_json = try std.json.stringifyAlloc(allocator, actual_data, .{});
+				defer allocator.free(actual_json);
+				if (!std.mem.eql(u8, ed, actual_json)) continue;
 			} else {
 				continue;
 			}
@@ -99,7 +65,7 @@ pub fn expectInvalid(e: InvalidExpectation, context: anytype) !void {
 
 		return;
 	}
-	var arr = std.ArrayList(u8).init(std.testing.allocator);
+	var arr = std.ArrayList(u8).init(allocator);
 	defer arr.deinit();
 
 	try std.json.stringify(errors, .{.whitespace = .{.indent_level = 1}}, arr.writer());

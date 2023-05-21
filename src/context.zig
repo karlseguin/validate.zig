@@ -1,9 +1,9 @@
 const std = @import("std");
-const t = @import("t.zig");
-const v = @import("validate.zig");
-
 const Map = @import("typed").Map;
-const Field = @import("object.zig").Field;
+
+const v = @import("validate.zig");
+const Field = v.Field;
+const DataBuilder = v.DataBuilder;
 
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
@@ -75,6 +75,14 @@ pub fn Context(comptime S: type) type {
 			allocator.destroy(self._arena);
 		}
 
+		pub fn reset(self: *Self) void {
+			self.field = null;
+			self._error_len = 0;
+			self._nesting_idx = null;
+			self.object = Map.readonlyEmpty();
+			_ = self._arena.reset(.free_all);
+		}
+
 		pub fn isValid(self: *Self) bool {
 			return self._error_len == 0;
 		}
@@ -130,80 +138,11 @@ pub fn Context(comptime S: type) type {
 			self._nesting[self._nesting_idx.?] = idx;
 		}
 
-		pub fn genericData(self: Self) GenericDataBuilder {
-			return GenericDataBuilder.init(self.allocator);
-		}
-
-		pub fn validateStringField(self: *Self, field: Field, validator: anytype, value: ?[]const u8) !?[]const u8 {
-			self.field = field;
-			return validator.validateString(value, self);
+		pub fn dataBuilder(self: Self) DataBuilder {
+			return DataBuilder.init(self.allocator);
 		}
 	};
 }
-
-pub const GenericDataBuilder = struct {
-	inner: *Inner,
-
-	// We do this so that we can mutate the values using a fluent interface.
-	// Calling ctx.genericData returns a const (tmp values are always const in zig)
-	// so we can't mutate it directly.
-	const Inner = struct {
-		// we defer reporting any error building our ObjectMap until done() is called
-		err: ?anyerror,
-		root: std.json.ObjectMap,
-
-		fn put(self: *Inner, key: []const u8, value: std.typed.Value) void {
-			self.root.put(key, value) catch |err| {
-				self.err = err;
-			};
-		}
-	};
-
-	const Self = @This();
-
-	// we expect allocator to be an ArenaAllocator which is managed by someone else!
-	pub fn init(allocator: Allocator) Self {
-		const inner = allocator.create(Inner) catch unreachable;
-		inner.* = Inner{
-			.err = null,
-			.root = std.json.ObjectMap.init(allocator),
-		};
-		return .{.inner = inner};
-	}
-
-	pub fn nul(self: Self, key: [:0]const u8) Self {
-		self.inner.put(key, .{.null = {}});
-		return self;
-	}
-
-	pub fn boolean(self: Self, key: [:0]const u8, value: bool) Self {
-		self.inner.put(key,.{.bool = value});
-		return self;
-	}
-
-	pub fn int(self: Self, key: [:0]const u8, value: i64) Self {
-		self.inner.put(key,.{.integer = value});
-		return self;
-	}
-
-	pub fn float(self: Self, key: [:0]const u8, value: f64) Self {
-		self.inner.put(key,.{.float = value});
-		return self;
-	}
-
-	pub fn string(self: Self, key: [:0]const u8, value: []const u8) Self {
-		self.inner.put(key,.{.string = value});
-		return self;
-	}
-
-	pub fn done(self: Self) !v.InvalidData {
-		const inner = self.inner;
-		if (inner.err) |err| {
-			return err;
-		}
-		return .{.generic = .{.object = inner.root}};
-	}
-};
 
 fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) ![]const u8{
 	var target_len: usize = 0;
@@ -261,81 +200,78 @@ fn intLength(value: usize) usize {
 	return digits;
 }
 
-// test "createArrayPath" {
-// 	{
-// 		var parts = [_][]const u8{"user", ""};
-// 		var indexes = [_]usize{0};
-// 		const actual = try createArrayPath(t.allocator, &parts, &indexes);
-// 		defer t.allocator.free(actual);
-// 		try t.expectString("user.0", actual);
-// 	}
+const t = @import("t.zig");
+test "createArrayPath" {
+	{
+		var parts = [_][]const u8{"user", ""};
+		var indexes = [_]usize{0};
+		const actual = try createArrayPath(t.allocator, &parts, &indexes);
+		defer t.allocator.free(actual);
+		try t.expectString("user.0", actual);
+	}
 
-// 	{
-// 		var parts = [_][]const u8{"user", "", "fav", ""};
-// 		var indexes = [_]usize{3, 232};
-// 		const actual = try createArrayPath(t.allocator, &parts, &indexes);
-// 		defer t.allocator.free(actual);
-// 		try t.expectString("user.3.fav.232", actual);
-// 	}
-// }
+	{
+		var parts = [_][]const u8{"user", "", "fav", ""};
+		var indexes = [_]usize{3, 232};
+		const actual = try createArrayPath(t.allocator, &parts, &indexes);
+		defer t.allocator.free(actual);
+		try t.expectString("user.3.fav.232", actual);
+	}
+}
 
-// test "intLength" {
-// 	try t.expectEqual(@as(usize, 1), intLength(0));
-// 	try t.expectEqual(@as(usize, 1), intLength(1));
-// 	try t.expectEqual(@as(usize, 1), intLength(9));
-// 	try t.expectEqual(@as(usize, 2), intLength(10));
-// 	try t.expectEqual(@as(usize, 2), intLength(18));
-// 	try t.expectEqual(@as(usize, 2), intLength(99));
-// 	try t.expectEqual(@as(usize, 3), intLength(100));
-// 	try t.expectEqual(@as(usize, 3), intLength(999));
-// 	try t.expectEqual(@as(usize, 4), intLength(1000));
-// 	try t.expectEqual(@as(usize, 4), intLength(9999));
-// 	try t.expectEqual(@as(usize, 5), intLength(10000));
-// 	try t.expectEqual(@as(usize, 5), intLength(10002));
-// }
+test "intLength" {
+	try t.expectEqual(@as(usize, 1), intLength(0));
+	try t.expectEqual(@as(usize, 1), intLength(1));
+	try t.expectEqual(@as(usize, 1), intLength(9));
+	try t.expectEqual(@as(usize, 2), intLength(10));
+	try t.expectEqual(@as(usize, 2), intLength(18));
+	try t.expectEqual(@as(usize, 2), intLength(99));
+	try t.expectEqual(@as(usize, 3), intLength(100));
+	try t.expectEqual(@as(usize, 3), intLength(999));
+	try t.expectEqual(@as(usize, 4), intLength(1000));
+	try t.expectEqual(@as(usize, 4), intLength(9999));
+	try t.expectEqual(@as(usize, 5), intLength(10000));
+	try t.expectEqual(@as(usize, 5), intLength(10002));
+}
 
-// test "context: addInvalidField with generic data" {
-// 	var ctx = try Context(void).init(t.allocator, .{}, {});
-// 	defer ctx.deinit(t.allocator);
+test "context: addInvalidField with generic data" {
+	var ctx = try Context(void).init(t.allocator, .{}, {});
+	defer ctx.deinit(t.allocator);
 
-// 	ctx.addInvalidField(v.InvalidField{
-// 		.field = "f1",
-// 		.code = 9101,
-// 		.err = "nope, cannot",
-// 		.data = try ctx.genericData().
-// 			nul("d1").
-// 			boolean("d2", true).
-// 			int("d3", 3).
-// 			float("d4", -2.3).
-// 			string("d5", "9000").done(),
-// 	});
+	ctx.addInvalidField(v.InvalidField{
+		.field = "f1",
+		.code = 9101,
+		.err = "nope, cannot",
+		.data = try ctx.dataBuilder().
+			put("d1", null).
+			put("d2", true).
+			put("d3", @as(u8, 3)).
+			put("d4", -2.3).
+			put("d5", "9000").done(),
+	});
 
-// 	var arr = std.ArrayList(u8).init(t.allocator);
-// 	defer arr.deinit();
-// 	try std.json.stringify(ctx.errors(), .{.emit_null_optional_fields = false}, arr.writer());
-// 	try t.expectString("[{\"field\":\"f1\",\"code\":9101,\"err\":\"nope, cannot\",\"data\":{\"d1\":null,\"d2\":true,\"d3\":3,\"d4\":-2.3e+00,\"d5\":\"9000\"}}]", arr.items);
-// }
+	var arr = std.ArrayList(u8).init(t.allocator);
+	defer arr.deinit();
+	try std.json.stringify(ctx.errors(), .{.emit_null_optional_fields = false}, arr.writer());
+	try t.expectString("[{\"field\":\"f1\",\"code\":9101,\"err\":\"nope, cannot\",\"data\":{\"d1\":null,\"d3\":3,\"d2\":true,\"d4\":-2.3,\"d5\":\"9000\"}}]", arr.items);
+}
 
-// test "context: validateStringField" {
-// 	var builder = try v.Builder(void).init(t.allocator);
-// 	defer builder.deinit(t.allocator);
+test "context: reset" {
+	var ctx = try Context(void).init(t.allocator, .{}, {});
+	defer ctx.deinit(t.allocator);
 
-// 	var ctx = try Context(void).init(t.allocator, .{}, {});
-// 	defer ctx.deinit(t.allocator);
+	ctx.addInvalidField(v.InvalidField{
+		.field = "f1",
+		.code = 9101,
+		.err = "nope",
+		.data = null,
+	});
 
-// 	const id_field = v.simpleField("id");
-// 	const id_validator = builder.uuid(.{});
+	try t.expectEqual(false, ctx.isValid());
+	try t.expectEqual(@as(usize, 1), ctx.errors().len);
 
-// 	{
-// 		// invalid
-// 		_ = try ctx.validateStringField(id_field, id_validator, "123");
-// 		try t.expectInvalid(.{.code = v.codes.TYPE_UUID, .field = "id"}, ctx);
-// 	}
+	ctx.reset();
 
-// 	{
-// 		// valid
-// 		t.reset(&ctx);
-// 		_ = try ctx.validateStringField(id_field, id_validator, "e88081b4-a592-470d-939a-172fa438c3dd");
-// 		try t.expectEqual(true, ctx.isValid());
-// 	}
-// }
+	try t.expectEqual(true, ctx.isValid());
+	try t.expectEqual(@as(usize, 0), ctx.errors().len);
+}

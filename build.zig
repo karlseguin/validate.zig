@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) !void {
 		.source_file = .{ .path = "src/validate.zig" },
 	});
 
-	const typed_module =  b.dependency("typed", .{
+	const typed_module = b.dependency("typed", .{
 		.target = target,
 		.optimize = optimize,
 	}).module("typed");

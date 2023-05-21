@@ -1,11 +1,12 @@
 const std = @import("std");
-
-const v = @import("validate.zig");
 const typed = @import("typed");
-const codes = @import("codes.zig");
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
-const Validator = @import("validator.zig").Validator;
+const v = @import("validate.zig");
+
+const codes = v.codes;
+const Builder = v.Builder;
+const Context = v.Context;
+const Validator = v.Validator;
+const DataBuilder = v.DataBuilder;
 
 const Allocator = std.mem.Allocator;
 
@@ -56,33 +57,43 @@ pub fn Bool(comptime S: type) type {
 		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
 			var bool_value: ?bool = null;
 			if (input) |untyped_value| {
-				bool_value = switch (untyped_value) {
-					.bool => |b| b,
-					.string => |s| blk: {
-						if (self.parse and s.len > 0) {
-							if (s[0] == '1') break :blk true;
-							if (s[0] == 'T') break :blk true;
-							if (s[0] == 't') break :blk true;
-							if (s[0] == '0') break :blk false;
-							if (s[0] == 'F') break :blk false;
-							if (s[0] == 'f') break :blk false;
-							if (std.ascii.eqlIgnoreCase(s, "true")) break :blk true;
-							if (std.ascii.eqlIgnoreCase(s, "false")) break :blk false;
-						}
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
+
+				var valid = false;
+				switch (untyped_value) {
+					.bool => |b| {
+						bool_value = b;
+						valid = true;
 					},
-					else => {
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
-					}
-				};
+					.string => |s| blk: {
+						if (self.parse) {
+							bool_value = parseString(s) orelse break :blk;
+							valid = true;
+						}
+					},
+					else => {}
+				}
+
+				if (!valid) {
+					try context.add(INVALID_TYPE);
+					return .{.null = {}};
+				}
 			}
 
 			if (try self.validate(bool_value, context)) |value| {
 				return .{.bool = value};
 			}
 			return .{.null = {}};
+		}
+
+		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?bool {
+			var bool_value: ?bool = null;
+			if (input) |string_value| {
+				bool_value = parseString(string_value) orelse {
+					try context.add(INVALID_TYPE);
+					return null;
+				};
+			}
+			return self.validate(bool_value, context);
 		}
 
 		pub fn validate(self: *const Self, optional_value: ?bool, context: *Context(S)) !?bool {
@@ -97,6 +108,7 @@ pub fn Bool(comptime S: type) type {
 			return self.executeFunction(value, context);
 		}
 
+
 		fn executeFunction(self: *const Self, value: ?bool, context: *Context(S)) !?bool {
 			if (self.function) |f| {
 				return f(value, context);
@@ -104,6 +116,19 @@ pub fn Bool(comptime S: type) type {
 			return value;
 		}
 	};
+}
+
+fn parseString(s: []const u8) ?bool {
+	if (s.len == 0) return null;
+	if (s[0] == '1') return true;
+	if (s[0] == 'T') return true;
+	if (s[0] == 't') return true;
+	if (s[0] == '0') return false;
+	if (s[0] == 'F') return false;
+	if (s[0] == 'f') return false;
+	if (std.ascii.eqlIgnoreCase(s, "true")) return true;
+	if (std.ascii.eqlIgnoreCase(s, "false")) return false;
+	return null;
 }
 
 const t = @import("t.zig");

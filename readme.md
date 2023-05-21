@@ -21,9 +21,9 @@ var builder = try validate.Builder(void).init(allocator);
 // defer builder.deinit(allocator);
 
 // Next we use our builder to create a validator for each of the individual fields:
-var year_validator = builder.int(.{.min = 1900, .max = 2050, .required = true});
+var year_validator = builder.int(u16, .{.min = 1900, .max = 2050, .required = true});
 var title_validator = builder.string(.{.min = 2, .max = 100, .required = true});
-var score_validator = builder.float(.{.min = 0, .max = 10});
+var score_validator = builder.float(f64, .{.min = 0, .max = 10});
 var tag_validator = builder.string(.{.choices = &.{"action", "sci-fi", "drama"}});
 
 // An array validator is like any other validator, except the first parameter is an optional
@@ -157,7 +157,7 @@ The signature of these functions is:
 *const fn(value: ?T, context: *Context(S)) !?T
 ```
 
-For an integer validator, `T` is `i64`. For a float validator, `T` is `f64` and so on.
+Where `T` is the type of value being validated. For a bool validator, `T` will be `bool`, for a string validator `T` will be `[]const u8`.
 
 There are a few important things to note about custom validators. First, as already mentioned, if the value is not required and is null, the custom validator **is** called with null. Thus, the type of `value` is `?T`. Second, custom validators can return a new value to replace the existing one, hence the return type of `?T`. Returning `null` will maintain the existing value. Finally, the provided `context` is useful for both simple and complex cases. At the very least, you'll need to call `context.add(...)` to add errors from your validator.
 
@@ -173,7 +173,7 @@ var builder = try validate.Builder(void).init(allocator);
 ```
 
 ### Int Validator
-An int validator is created via the `builder.int` function. This function takes a configuration structure. The full possible configuration, with default values, is show below:
+An int validator is created via the `builder.int` function. This function takes an integer type and configuration structure. The full possible configuration, with default values, is show below:
 
 ```zig
 const age_validator = builder.int(.{
@@ -181,17 +181,17 @@ const age_validator = builder.int(.{
     .required = false,
 
     // the minimum allowed value (inclusive of min), null == no limit
-    .min = null, // i64
+    .min = null, // ?T
 
     // the maximum allowed value (inclusive of max), null == no limit
-    .max = null, // i64
+    .max = null, // ?T
 
     // when true, will accept a string input and attempt to convert it to an integer
     .parse = false,
 
     // a custom validation function that will receive the value to validate
     // along with a validation.Context.
-    function: ?*const fn(value: ?i64, context: *Context(S)) anyerror!?i64 = null,
+    function: ?*const fn(value: ?T, context: *Context(S)) anyerror!?T = null,
 });
 ```
 
@@ -200,7 +200,7 @@ In rare cases (e.g. OOM) `builder.int` can panic. `builder.tryInt` function can 
 Typically, this validator is invoked as part of an object validator. However, it is possible to call `validateJsonValue` directly on this validator by providing a `std.typed.Value` and a validation Context.
 
 ### Float Validator
-A float validator is created via the `builder.float` function. This function takes a configuration structure. The full possible configuration, with default values, is show below:
+A float validator is created via the `builder.float` function. This function takes a float type and configuration structure. The full possible configuration, with default values, is show below:
 
 ```zig
 const rating_validator = builder.float(.{
@@ -208,10 +208,10 @@ const rating_validator = builder.float(.{
     .required = false,
 
     // the minimum allowed value (inclusive of min), null == no limit
-    .min = null, // f64
+    .min = null, // ?T
 
     // the maximum allowed value (inclusive of max), null == no limit
-    .max = null, // f64
+    .max = null, // ?T
 
     // when false, integers will be accepted and converted to an f64
     // when true, if an integer is given, validation will fail
@@ -222,7 +222,7 @@ const rating_validator = builder.float(.{
 
     // a custom validation function that will receive the value to validate
     // along with a validation.Context.
-    function: ?*const fn(value: ?f64, context: *Context(S)) anyerror!?f64 = null,
+    function: ?*const fn(value: ?T, context: *Context(S)) anyerror!?T = null,
 });
 ```
 

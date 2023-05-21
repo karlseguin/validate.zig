@@ -87,7 +87,7 @@ pub fn Pool(comptime S: type) type {
 				return;
 			}
 
-			reset(context);
+			context.reset();
 			defer self.mutex.unlock();
 			contexts[available] = context;
 			self.available = available + 1;
@@ -97,14 +97,6 @@ pub fn Pool(comptime S: type) type {
 			var context = try allocator.create(Context);
 			context.* = try Context.init(allocator, config, undefined);
 			return context;
-		}
-
-		pub fn reset(context: *Context) void {
-			context.field = null;
-			context._error_len = 0;
-			context._nesting_idx = null;
-			context.object = Map.readonlyEmpty();
-			_ = context._arena.reset(.free_all);
 		}
 	};
 }

@@ -1,11 +1,11 @@
 const std = @import("std");
 const typed = @import("typed");
-
 const v = @import("validate.zig");
-const codes = @import("codes.zig");
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
-const Validator = @import("validator.zig").Validator;
+
+const codes = v.codes;
+const Builder = v.Builder;
+const Context = v.Context;
+const Validator = v.Validator;
 
 const ascii = std.ascii;
 const Allocator = std.mem.Allocator;

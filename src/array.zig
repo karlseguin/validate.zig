@@ -1,11 +1,12 @@
 const std = @import("std");
 const typed = @import("typed");
-
 const v = @import("validate.zig");
-const codes = @import("codes.zig");
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
-const Validator = @import("validator.zig").Validator;
+
+const codes = v.codes;
+const Builder = v.Builder;
+const Context = v.Context;
+const Validator = v.Validator;
+const DataBuilder = v.DataBuilder;
 
 const Allocator = std.mem.Allocator;
 
@@ -39,7 +40,7 @@ pub fn Array(comptime S: type) type {
 				const plural = if (m == 1) "" else "s";
 				invalid_min = v.Invalid{
 					.code = codes.ARRAY_LEN_MIN,
-					.data = .{.imin = .{.min = @intCast(i64, m) }},
+					.data = try DataBuilder.init(allocator).put("min", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "must have at least {d} item{s}", .{m, plural}),
 				};
 			}
@@ -49,7 +50,7 @@ pub fn Array(comptime S: type) type {
 				const plural = if (m == 1) "" else "s";
 				invalid_max = v.Invalid{
 					.code = codes.ARRAY_LEN_MAX,
-					.data = .{.imax = .{.max = @intCast(i64, m) }},
+					.data = try DataBuilder.init(allocator).put("max", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "must no more than {d} item{s}", .{m, plural}),
 				};
 			}
@@ -260,7 +261,7 @@ test "array: nested" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const itemValidator = builder.int(.{.min = 4});
+	const itemValidator = builder.int(i64, .{.min = 4});
 	const arrayValidator = builder.array(itemValidator, .{});
 	const objectValidator = builder.object(&.{
 		builder.field("items", arrayValidator),
@@ -280,7 +281,7 @@ test "array: deeplys nested field name" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const favValidator = builder.int(.{.min = 4});
+	const favValidator = builder.int(i64, .{.min = 4});
 	const favArrayValidator = builder.array(favValidator, .{.required = true});
 	const itemValidator = builder.object(&.{builder.field("fav", favArrayValidator)}, .{});
 	const itemsArrayValidator = builder.array(itemValidator, .{});
@@ -306,7 +307,7 @@ test "array: change value" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const itemValidator = builder.int(.{.function = testArrayChangeValue});
+	const itemValidator = builder.int(i64, .{.function = testArrayChangeValue});
 	const arrayValidator = builder.array(itemValidator, .{});
 	const objectValidator = builder.object(&.{
 		builder.field("items", arrayValidator),
