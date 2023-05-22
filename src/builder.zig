@@ -1,20 +1,23 @@
 const std = @import("std");
 const object = @import("object.zig");
 const re = @cImport(@cInclude("regez.h"));
+const v = @import("validate.zig");
 
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
-const Int = @import("int.zig").Int;
-const Any = @import("any.zig").Any;
-const Bool = @import("bool.zig").Bool;
-const UUID = @import("uuid.zig").UUID;
-const Float = @import("float.zig").Float;
-const Array = @import("array.zig").Array;
-const String = @import("string.zig").String;
-const Validator = @import("validator.zig").Validator;
+const Int = v.Int;
+const Any = v.Any;
+const Bool = v.Bool;
+const Date = v.Date;
+const Time = v.Time;
+const UUID = v.UUID;
+const Float = v.Float;
+const Array = v.Array;
+const String = v.String;
 const Field = object.Field;
 const Object = object.Object;
+const Validator = v.Validator;
 const FieldValidator = object.FieldValidator;
 
 pub fn Builder(comptime S: type) type {
@@ -113,6 +116,24 @@ pub fn Builder(comptime S: type) type {
 		}
 		pub fn uuid(self: *Self, config: UUID(S).Config) *UUID(S) {
 			return self.tryUuid(config) catch unreachable;
+		}
+
+		pub fn tryDate(self: Self, config: Date(S).Config) !*Date(S) {
+			const val = try self.allocator.create(Date(S));
+			val.* = try Date(S).init(self.allocator, config);
+			return val;
+		}
+		pub fn date(self: Self, config: Date(S).Config) *Date(S) {
+			return self.tryDate(config) catch unreachable;
+		}
+
+		pub fn tryTime(self: Self, config: Time(S).Config) !*Time(S) {
+			const val = try self.allocator.create(Time(S));
+			val.* = try Time(S).init(self.allocator, config);
+			return val;
+		}
+		pub fn time(self: Self, config: Time(S).Config) *Time(S) {
+			return self.tryTime(config) catch unreachable;
 		}
 
 		pub fn tryArray(self: Self, validator: anytype, config: Array(S).Config) !*Array(S) {
