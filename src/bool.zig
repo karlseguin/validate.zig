@@ -119,13 +119,15 @@ pub fn Bool(comptime S: type) type {
 }
 
 fn parseString(s: []const u8) ?bool {
-	if (s.len == 0) return null;
-	if (s[0] == '1') return true;
-	if (s[0] == 'T') return true;
-	if (s[0] == 't') return true;
-	if (s[0] == '0') return false;
-	if (s[0] == 'F') return false;
-	if (s[0] == 'f') return false;
+	if (s.len == 1) {
+		const a = s[0];
+		if (a == '1') return true;
+		if (a == 'T') return true;
+		if (a == 't') return true;
+		if (a == '0') return false;
+		if (a == 'F') return false;
+		if (a == 'f') return false;
+	}
 	if (std.ascii.eqlIgnoreCase(s, "true")) return true;
 	if (std.ascii.eqlIgnoreCase(s, "false")) return false;
 	return null;
