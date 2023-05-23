@@ -9,7 +9,6 @@ pub const Context = @import("context.zig").Context;
 pub const Validator = @import("validator.zig").Validator;
 pub const DataBuilder = @import("data_builder.zig").DataBuilder;
 
-
 pub const Any = @import("any.zig").Any;
 pub const Int = @import("int.zig").Int;
 pub const Bool = @import("bool.zig").Bool;

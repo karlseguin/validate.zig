@@ -141,6 +141,11 @@ pub fn Context(comptime S: type) type {
 		pub fn dataBuilder(self: Self) DataBuilder {
 			return DataBuilder.init(self.allocator);
 		}
+
+		pub fn dump(self: Self) !void {
+			const e = try std.json.stringifyAlloc(self.allocator, self.errors(), .{});
+			std.debug.print("Validation errors: \n{s}", .{e});
+		}
 	};
 }
 
