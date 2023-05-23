@@ -112,7 +112,7 @@ pub fn Date(comptime S: type) type {
 			return .{.null = {}};
 		}
 
-		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?Date {
+		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?typed.Date {
 			var date_value: ?typed.Date = null;
 			if (input) |string_value| {
 				date_value = typed.Date.parse(string_value) catch {

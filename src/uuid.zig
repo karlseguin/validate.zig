@@ -106,6 +106,11 @@ pub fn UUID(comptime S: type) type {
 			return .{.null = {}};
 		}
 
+		// exists to be consistent with the other validators
+		pub fn validateString(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
+			return self.validate(optional_value, context);
+		}
+
 		pub fn validate(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
 			const value = optional_value orelse {
 				if (self.required) {

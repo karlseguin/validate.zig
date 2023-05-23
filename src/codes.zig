@@ -23,3 +23,7 @@ pub const DATE_MAX = 22;
 pub const TYPE_TIME = 23;
 pub const TIME_MIN = 24;
 pub const TIME_MAX = 25;
+pub const STRING_BASE64 = 26;
+pub const STRING_BASE64_NO_PADDING = 27;
+pub const STRING_BASE64_URL_SAFE = 28;
+pub const STRING_BASE64_URL_SAFE_NO_PADDING = 29;

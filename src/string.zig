@@ -19,11 +19,32 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be a string",
 };
 
+const INVALID_BASE64 = v.Invalid{
+	.code = codes.STRING_BASE64,
+	.err = "must be a standard base64 encoded value",
+};
+
+const INVALID_BASE64_NO_PADDING = v.Invalid{
+	.code = codes.STRING_BASE64_NO_PADDING,
+	.err = "must be a standard base64 encoded value without padding",
+};
+
+const INVALID_BASE64_URL_SAFE = v.Invalid{
+	.code = codes.STRING_BASE64_URL_SAFE,
+	.err = "must be a url-safe base64 encoded value",
+};
+
+const INVALID_BASE64_URL_SAFE_NO_PADDING = v.Invalid{
+	.code = codes.STRING_BASE64_URL_SAFE_NO_PADDING,
+	.err = "must be a url-safe base64 encoded value without padding",
+};
+
 pub fn String(comptime S: type) type {
 	return struct {
 		required: bool,
 		min: ?usize,
 		max: ?usize,
+		decode: ?EncodingType = null,
 		choices: ?[]const []const u8 = null,
 		function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8,
 		invalid_min: ?v.Invalid,
@@ -34,10 +55,18 @@ pub fn String(comptime S: type) type {
 
 		const Self = @This();
 
+		pub const EncodingType = enum {
+			base64,
+			base64_no_pad,
+			base64_url_safe,
+			base64_url_safe_no_pad,
+		};
+
 		pub const Config = struct {
 			min: ?usize = null,
 			max: ?usize = null,
 			required: bool = false,
+			decode: ?EncodingType = null,
 			choices: ?[]const []const u8 = null,
 			pattern: ?[]const u8 = null,
 			function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8 = null,
@@ -101,6 +130,7 @@ pub fn String(comptime S: type) type {
 				.regex = regex,
 				.min = config.min,
 				.max = config.max,
+				.decode = config.decode,
 				.choices = owned_choices,
 				.required = config.required,
 				.function = config.function,
@@ -146,14 +176,55 @@ pub fn String(comptime S: type) type {
 			return .{.null = {}};
 		}
 
+		// exists to be consistent with the other validators
+		pub fn validateString(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
+			return self.validate(optional_value, context);
+		}
+
 		pub fn validate(self: *const Self, optional_value: ?[]const u8, context: *Context(S)) !?[]const u8 {
-				const value = optional_value orelse {
+				var value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
 					return null;
 				}
 				return self.executeFunction(null, context);
 			};
+
+			if (self.decode) |decode_type| {
+				var invalid: v.Invalid = undefined;
+				var decoder: std.base64.Base64Decoder = undefined;
+				switch (decode_type) {
+					.base64 => {
+						invalid = INVALID_BASE64;
+						decoder = std.base64.standard.Decoder;
+					},
+					.base64_no_pad => {
+						invalid = INVALID_BASE64_NO_PADDING;
+						decoder = std.base64.standard_no_pad.Decoder;
+					},
+					.base64_url_safe => {
+						invalid = INVALID_BASE64_URL_SAFE;
+						decoder = std.base64.url_safe.Decoder;
+					},
+					.base64_url_safe_no_pad => {
+						invalid = INVALID_BASE64_URL_SAFE_NO_PADDING;
+						decoder = std.base64.url_safe_no_pad.Decoder;
+					},
+				}
+
+				const n = decoder.calcSizeForSlice(value) catch {
+					try context.add(invalid);
+					return null;
+				};
+
+				var decoded = try context.allocator.alloc(u8, n);
+				decoder.decode(decoded, value) catch {
+					try context.add(invalid);
+					return null;
+				};
+
+				value = decoded;
+			}
 
 			if (self.min) |m| {
 				std.debug.assert(self.invalid_min != null);
@@ -449,6 +520,33 @@ test "string: pattern" {
 		t.reset(&context);
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "Ac"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data = .{.pattern = "[ab]c"}}, context);
+	}
+}
+
+test "string: encoding" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.string(.{.max = 5, .decode = .base64});
+
+	{
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "not encoded!"}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_BASE64}, context);
+	}
+
+	{
+		t.reset(&context);
+		try t.expectString("hello", (try validator.validateValue(.{.string = "aGVsbG8="}, &context)).string);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "aGVsbG8h"}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data = .{.max = 5}}, context);
 	}
 }
 

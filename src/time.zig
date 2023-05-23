@@ -112,7 +112,7 @@ pub fn Time(comptime S: type) type {
 			return .{.null = {}};
 		}
 
-		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?Time {
+		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?typed.Time {
 			var time_value: ?typed.Time = null;
 			if (input) |string_value| {
 				time_value = typed.Time.parse(string_value) catch {
