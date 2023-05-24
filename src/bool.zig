@@ -19,12 +19,14 @@ pub fn Bool(comptime S: type) type {
 	return struct {
 		parse: bool,
 		required: bool,
+		default: ?bool,
 		function: ?*const fn(value: ?bool, context: *Context(S)) anyerror!?bool,
 
 		const Self = @This();
 
 		pub const Config = struct {
 			parse: bool = false,
+			default: ?bool = null,
 			required: bool = false,
 			function: ?*const fn(value: ?bool, context: *Context(S)) anyerror!?bool = null,
 		};
@@ -32,6 +34,7 @@ pub fn Bool(comptime S: type) type {
 		pub fn init(_: Allocator, config: Config) !Self {
 			return .{
 				.parse = config.parse,
+				.default = config.default,
 				.required = config.required,
 				.function = config.function,
 			};
@@ -57,7 +60,6 @@ pub fn Bool(comptime S: type) type {
 		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
 			var bool_value: ?bool = null;
 			if (input) |untyped_value| {
-
 				var valid = false;
 				switch (untyped_value) {
 					.bool => |b| {
@@ -111,9 +113,9 @@ pub fn Bool(comptime S: type) type {
 
 		fn executeFunction(self: *const Self, value: ?bool, context: *Context(S)) !?bool {
 			if (self.function) |f| {
-				return f(value, context);
+				return (try f(value, context)) orelse self.default;
 			}
-			return value;
+			return value orelse self.default;
 		}
 	};
 }
@@ -142,8 +144,9 @@ test "bool: required" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.boolean(.{.required = false, });
-	const required = notRequired.setRequired(true, &builder);
+	const not_required = builder.boolean(.{.required = false});
+	const required = not_required.setRequired(true, &builder);
+	const not_required_default = builder.boolean(.{.required = false, .default = true});
 
 	{
 		try t.expectEqual(@as(?bool, null), try required.validate(null, &context));
@@ -152,7 +155,13 @@ test "bool: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
+		try t.expectEqual(nullValue, try not_required.validateValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(true, (try not_required_default.validateValue(null, &context)).bool);
 		try t.expectEqual(true, context.isValid());
 	}
 

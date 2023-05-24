@@ -21,6 +21,7 @@ pub fn Time(comptime S: type) type {
 		min: ?typed.Time,
 		max: ?typed.Time,
 		parse: bool,
+		default: ?typed.Time,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
 		function: ?*const fn(value: ?typed.Time, context: *Context(S)) anyerror!?typed.Time,
@@ -32,6 +33,7 @@ pub fn Time(comptime S: type) type {
 			max: ?typed.Time = null,
 			parse: bool = false,
 			required: bool = false,
+			default: ?typed.Time = null,
 			function: ?*const fn(value: ?typed.Time, context: *Context(S)) anyerror!?typed.Time = null,
 		};
 
@@ -58,6 +60,7 @@ pub fn Time(comptime S: type) type {
 				.min = config.min,
 				.max = config.max,
 				.parse = config.parse,
+				.default = config.default,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
 				.required = config.required,
@@ -153,9 +156,9 @@ pub fn Time(comptime S: type) type {
 
 		fn executeFunction(self: *const Self, value: ?typed.Time, context: *Context(S)) !?typed.Time {
 			if (self.function) |f| {
-				return f(value, context);
+				return (try f(value, context)) orelse self.default;
 			}
-			return value;
+			return value orelse self.default;
 		}
 	};
 }
@@ -169,8 +172,10 @@ test "time: required" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.time(.{.required = false, });
-	const required = notRequired.setRequired(true, &builder);
+	const default = try typed.Time.parse("08:27:33.923911");
+	const not_required = builder.time(.{.required = false});
+	const required = not_required.setRequired(true, &builder);
+	const not_required_default = builder.time(.{.required = false, .default = default });
 
 	{
 		try t.expectEqual(nullValue, try required.validateValue(null, &context));
@@ -179,7 +184,13 @@ test "time: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
+		try t.expectEqual(nullValue, try not_required.validateValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(default, (try not_required_default.validateValue(null, &context)).time);
 		try t.expectEqual(true, context.isValid());
 	}
 

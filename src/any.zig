@@ -81,8 +81,8 @@ test "any: required" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.any(.{.required = false, });
-	const required = notRequired.setRequired(true, &builder);
+	const not_required = builder.any(.{.required = false, });
+	const required = not_required.setRequired(true, &builder);
 
 	{
 		try t.expectEqual(nullValue, try required.validateValue(null, &context));
@@ -91,7 +91,7 @@ test "any: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
+		try t.expectEqual(nullValue, try not_required.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 

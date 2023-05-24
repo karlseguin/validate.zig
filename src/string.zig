@@ -44,6 +44,7 @@ pub fn String(comptime S: type) type {
 		required: bool,
 		min: ?usize,
 		max: ?usize,
+		default: ?[]const u8,
 		decode: ?EncodingType = null,
 		choices: ?[]const []const u8 = null,
 		function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8,
@@ -66,6 +67,7 @@ pub fn String(comptime S: type) type {
 			min: ?usize = null,
 			max: ?usize = null,
 			required: bool = false,
+			default: ?[]const u8 = null,
 			decode: ?EncodingType = null,
 			choices: ?[]const []const u8 = null,
 			pattern: ?[]const u8 = null,
@@ -132,6 +134,7 @@ pub fn String(comptime S: type) type {
 				.max = config.max,
 				.decode = config.decode,
 				.choices = owned_choices,
+				.default = config.default,
 				.required = config.required,
 				.function = config.function,
 				.invalid_min = invalid_min,
@@ -265,9 +268,9 @@ pub fn String(comptime S: type) type {
 
 		fn executeFunction(self: *const Self, value: ?[]const u8, context: *Context(S)) !?[]const u8 {
 			if (self.function) |f| {
-				return f(value, context);
+				return (try f(value, context)) orelse self.default;
 			}
-			return value;
+			return value orelse self.default;
 		}
 	};
 }
@@ -300,8 +303,9 @@ test "string: required" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.string(.{.required = false, });
-	const required = notRequired.setRequired(true, &builder);
+	const not_required = builder.string(.{.required = false});
+	const required = not_required.setRequired(true, &builder);
+	const not_required_default = builder.string(.{.required = false, .default = "Duncan"});
 
 	{
 		try t.expectEqual(nullValue, try required.validateValue(null, &context));
@@ -310,7 +314,13 @@ test "string: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
+		try t.expectEqual(nullValue, try not_required.validateValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectString("Duncan", (try not_required_default.validateValue(null, &context)).string);
 		try t.expectEqual(true, context.isValid());
 	}
 

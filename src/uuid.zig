@@ -56,16 +56,19 @@ const hex_to_nibble = [256]u8{
 pub fn UUID(comptime S: type) type {
 	return struct {
 		required: bool,
+		default: ?[]const u8,
 		function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8,
 		const Self = @This();
 
 		pub const Config = struct {
 			required: bool = false,
+			default: ?[]const u8 = null,
 			function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8 = null,
 		};
 
 		pub fn init(_: Allocator, config: Config) !Self {
 			return .{
+				.default = config.default,
 				.required = config.required,
 				.function = config.function,
 			};
@@ -140,9 +143,9 @@ pub fn UUID(comptime S: type) type {
 
 		fn executeFunction(self: *const Self, value: ?[]const u8, context: *Context(S)) !?[]const u8 {
 			if (self.function) |f| {
-				return f(value, context);
+				return (try f(value, context)) orelse self.default;
 			}
-			return value;
+			return value orelse self.default;
 		}
 	};
 }
@@ -156,8 +159,9 @@ test "UUID: required" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.uuid(.{.required = false, });
-	const required = notRequired.setRequired(true, &builder);
+	const not_required = builder.uuid(.{.required = false});
+	const required = not_required.setRequired(true, &builder);
+	const not_required_default = builder.uuid(.{.required = false, .default = "28f6879c-2dfd-4579-ad94-4d5791bae24b"});
 
 	{
 		try t.expectEqual(nullValue, try required.validateValue(null, &context));
@@ -166,7 +170,13 @@ test "UUID: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
+		try t.expectEqual(nullValue, try not_required.validateValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectString("28f6879c-2dfd-4579-ad94-4d5791bae24b", (try not_required_default.validateValue(null, &context)).string);
 		try t.expectEqual(true, context.isValid());
 	}
 

@@ -29,6 +29,7 @@ pub fn Float(comptime T: type, comptime S: type) type {
 		max: ?T,
 		parse: bool,
 		strict: bool,
+		default: ?T,
 		bit_invalid: v.Invalid,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
@@ -39,6 +40,7 @@ pub fn Float(comptime T: type, comptime S: type) type {
 		pub const Config = struct {
 			min: ?T = null,
 			max: ?T = null,
+			default: ?T = null,
 			parse: bool = false,
 			strict: bool = false,
 			required: bool = false,
@@ -75,6 +77,7 @@ pub fn Float(comptime T: type, comptime S: type) type {
 				.max = config.max,
 				.parse = config.parse,
 				.strict = config.strict,
+				.default = config.default,
 				.bit_invalid = bit_invalid,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
@@ -230,9 +233,9 @@ pub fn Float(comptime T: type, comptime S: type) type {
 
 		fn executeFunction(self: *const Self, value: ?T, context: *Context(S)) !?T {
 			if (self.function) |f| {
-				return f(value, context);
+				return (try f(value, context)) orelse self.default;
 			}
-			return value;
+			return value orelse self.default;
 		}
 	};
 }
@@ -246,8 +249,9 @@ test "float: required" {
 	var builder = t.builder();
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.float(f64, .{.required = false, });
-	const required = notRequired.setRequired(true, &builder);
+	const not_required = builder.float(f64, .{.required = false});
+	const required = not_required.setRequired(true, &builder);
+	const not_required_default = builder.float(f64, .{.required = false, .default = 123.45});
 
 	{
 		try t.expectEqual(nullValue, try required.validateValue(null, &context));
@@ -256,7 +260,13 @@ test "float: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
+		try t.expectEqual(nullValue, try not_required.validateValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(@as(f64, 123.45), (try not_required_default.validateValue(null, &context)).f64);
 		try t.expectEqual(true, context.isValid());
 	}
 

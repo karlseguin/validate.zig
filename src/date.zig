@@ -21,6 +21,7 @@ pub fn Date(comptime S: type) type {
 		min: ?typed.Date,
 		max: ?typed.Date,
 		parse: bool,
+		default: ?typed.Date,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
 		function: ?*const fn(value: ?typed.Date, context: *Context(S)) anyerror!?typed.Date,
@@ -31,6 +32,7 @@ pub fn Date(comptime S: type) type {
 			min: ?typed.Date = null,
 			max: ?typed.Date = null,
 			parse: bool = false,
+			default: ?typed.Date = null,
 			required: bool = false,
 			function: ?*const fn(value: ?typed.Date, context: *Context(S)) anyerror!?typed.Date = null,
 		};
@@ -58,6 +60,7 @@ pub fn Date(comptime S: type) type {
 				.min = config.min,
 				.max = config.max,
 				.parse = config.parse,
+				.default = config.default,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
 				.required = config.required,
@@ -153,9 +156,9 @@ pub fn Date(comptime S: type) type {
 
 		fn executeFunction(self: *const Self, value: ?typed.Date, context: *Context(S)) !?typed.Date {
 			if (self.function) |f| {
-				return f(value, context);
+				return (try f(value, context)) orelse self.default;
 			}
-			return value;
+			return value orelse self.default;
 		}
 	};
 }
@@ -169,8 +172,10 @@ test "date: required" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const notRequired = builder.date(.{.required = false, });
-	const required = notRequired.setRequired(true, &builder);
+	const default = try  typed.Date.parse("2023-05-24");
+	const not_required = builder.date(.{.required = false, });
+	const required = not_required.setRequired(true, &builder);
+	const not_required_default = builder.date(.{.required = false, .default = default});
 
 	{
 		try t.expectEqual(nullValue, try required.validateValue(null, &context));
@@ -179,7 +184,13 @@ test "date: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(nullValue, try notRequired.validateValue(null, &context));
+		try t.expectEqual(nullValue, try not_required.validateValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(default, (try not_required_default.validateValue(null, &context)).date);
 		try t.expectEqual(true, context.isValid());
 	}
 
