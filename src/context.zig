@@ -20,6 +20,7 @@ pub fn Context(comptime S: type) type {
 		object: Map,
 		field: ?Field,
 		allocator: Allocator,
+		force_prefix: ?[]const u8,
 
 		const Self = @This();
 
@@ -54,7 +55,8 @@ pub fn Context(comptime S: type) type {
 				.state = state,
 				.field = null,
 				.allocator = aa,
-				.object = Map.readonlyEmpty(),
+				.force_prefix = null,
+				.object = Map.init(aa),
 				._arena = arena,
 				._error_len = 0,
 				._nesting_idx = null,
@@ -79,6 +81,7 @@ pub fn Context(comptime S: type) type {
 			self.field = null;
 			self._error_len = 0;
 			self._nesting_idx = null;
+			self.force_prefix = null;
 			self.object = Map.readonlyEmpty();
 			_ = self._arena.reset(.free_all);
 		}
@@ -100,6 +103,19 @@ pub fn Context(comptime S: type) type {
 					field_path = f.path;
 				}
 			}
+
+			if (self.force_prefix) |prefix| {
+				if (field_path) |path| {
+					var prefixed = try self.allocator.alloc(u8, prefix.len + path.len + 1);
+					@memcpy(prefixed[0..prefix.len], prefix);
+					prefixed[prefix.len] = '.';
+					@memcpy(prefixed[prefix.len+1..], path);
+					field_path = prefixed;
+				} else {
+					field_path = prefix;
+				}
+			}
+
 
 			self.addInvalidField(v.InvalidField{
 				.code = invalid.code,

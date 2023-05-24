@@ -160,7 +160,10 @@ pub fn Object(comptime S: type) type {
 				if (value.m.getEntry(name)) |entry| {
 					entry.value_ptr.* = try fv.validator.validateValue(entry.value_ptr.*, context);
 				} else {
-					try value.put(name, try fv.validator.validateValue(null, context));
+					switch (try fv.validator.validateValue(null, context)) {
+						.null => {},
+						else => |new_value| try value.put(name, new_value),
+					}
 				}
 			}
 
@@ -300,6 +303,25 @@ test "object: forced nesting" {
 	{
 		_ = try user_validator.validateJsonS("{}", &context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.age"}, context);
+	}
+}
+
+test "object: force_prefix" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 10, .max_nesting = 2}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const age_validator = builder.int(i64, .{.required = true});
+	const user_validator = builder.object(&.{
+		builder.field("age", age_validator),
+	}, .{.nest = &[_][]const u8{"user"}});
+
+	{
+		context.force_prefix = "data";
+		_ = try user_validator.validateJsonS("{}", &context);
+		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "data.user.age"}, context);
 	}
 }
 
