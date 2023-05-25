@@ -4,17 +4,18 @@ pub fn build(b: *std.Build) !void {
 	const target = b.standardTargetOptions(.{});
 	const optimize = b.standardOptimizeOption(.{});
 
-	_ = b.addModule("validate", .{
-		.source_file = .{ .path = "src/validate.zig" },
-	});
-
 	const typed_module = b.dependency("typed", .{
 		.target = target,
 		.optimize = optimize,
 	}).module("typed");
 
+	_ = b.addModule("validate", .{
+		.source_file = .{.path = "src/validate.zig"},
+		.dependencies = &.{ .{.name = "typed", .module = typed_module }},
+	});
+
 	const lib_test = b.addTest(.{
-		.root_source_file = .{ .path = "src/validate.zig" },
+		.root_source_file = .{.path = "src/validate.zig"},
 		.target = target,
 		.optimize = optimize,
 	});
