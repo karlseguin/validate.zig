@@ -25,17 +25,28 @@ pub fn Float(comptime T: type, comptime S: type) type {
 
 	return struct {
 		required: bool,
-		min: ?T,
-		max: ?T,
+		min: T,
+		max: T,
 		parse: bool,
 		strict: bool,
 		default: ?T,
-		bit_invalid: v.Invalid,
-		min_invalid: ?v.Invalid,
-		max_invalid: ?v.Invalid,
+		min_invalid: v.Invalid,
+		max_invalid: v.Invalid,
 		function: ?*const fn(value: ?T, context: *Context(S)) anyerror!?T,
 
+		const T_MAX = std.math.floatMax(T);
+		// floatMin returns the smallest decimal, something like 0.00006103515625 for an f32
+		// (clearly not the minimal float!). Very inconsistent. I believe -T_MAX is correct.
+		const T_MIN = -T_MAX;
+
 		const Self = @This();
+
+		const InvalidType = enum {
+			none,
+			min,
+			max,
+			type,
+		};
 
 		pub const Config = struct {
 			min: ?T = null,
@@ -48,37 +59,27 @@ pub fn Float(comptime T: type, comptime S: type) type {
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
-			var min_invalid: ?v.Invalid = null;
-			if (config.min) |m| {
-				min_invalid = v.Invalid{
-					.code = codes.FLOAT_MIN,
-					.data = try DataBuilder.init(allocator).put("min", m).done(),
-					.err = try std.fmt.allocPrint(allocator, "cannot be less than {d}", .{m}),
-				};
-			}
+			const min = config.min orelse T_MIN;
 
-			var max_invalid: ?v.Invalid = null;
-			if (config.max) |m| {
-				max_invalid = v.Invalid{
-					.code = codes.FLOAT_MAX,
-					.data = try DataBuilder.init(allocator).put("max", m).done(),
-					.err = try std.fmt.allocPrint(allocator, "cannot be greater than {d}", .{m}),
-				};
-			}
+			const min_invalid = v.Invalid{
+				.code = codes.FLOAT_MIN,
+				.data = try DataBuilder.init(allocator).put("min", min).done(),
+				.err = try std.fmt.allocPrint(allocator, "cannot be less than {d}", .{min}),
+			};
 
-			const bit_invalid = v.Invalid{
-				.code = codes.INT_BIT,
-				.data = try DataBuilder.init(allocator).put("type", @typeName(T)).done(),
-				.err = try std.fmt.allocPrint(allocator, "is not a valid float type", .{}),
+			const max = config.max orelse T_MAX;
+			const max_invalid = v.Invalid{
+				.code = codes.FLOAT_MAX,
+				.data = try DataBuilder.init(allocator).put("max", max).done(),
+				.err = try std.fmt.allocPrint(allocator, "cannot be greater than {d}", .{max}),
 			};
 
 			return .{
-				.min = config.min,
-				.max = config.max,
+				.min = min,
+				.max = max,
 				.parse = config.parse,
 				.strict = config.strict,
 				.default = config.default,
-				.bit_invalid = bit_invalid,
 				.min_invalid = min_invalid,
 				.max_invalid = max_invalid,
 				.required = config.required,
@@ -106,83 +107,63 @@ pub fn Float(comptime T: type, comptime S: type) type {
 		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
 			var float_value: ?T = null;
 			if (input) |untyped_value| {
-				const bits =  @typeInfo(T).Float.bits;
-
-				var valid = false;
+				var invalid_type = InvalidType.none;
 				switch (untyped_value) {
-					.f64 => |f| {
-						if (bits >= 64) {
-							float_value = @floatCast(T, f);
-							valid = true;
-						}
+					.f64 => |n| {
+						if (n < T_MIN) { invalid_type = .min;
+						} else if (n > T_MAX) { invalid_type = .max;
+						} else float_value = @floatCast(T, n);
 					},
-					.f32 => |f| {
-						if (bits >= 32) {
-							float_value = @floatCast(T, f);
-							valid = true;
-						}
+					.f32 => |n| {
+						if (n < T_MIN) { invalid_type = .min;
+						} else if (n > T_MAX) { invalid_type = .max;
+						} else float_value = @floatCast(T, n);
 					},
 					.string => |s| blk: {
 						if (self.parse) {
-							float_value = std.fmt.parseFloat(T, s) catch break :blk;
-							valid = true;
+							float_value = std.fmt.parseFloat(T, s) catch {
+								invalid_type = .type;
+								break :blk;
+							};
+						} else {
+							invalid_type = .type;
 						}
 					},
 					else => {
 						if (!self.strict) {
 							switch (untyped_value) {
-								.i8 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.i16 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.i32 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.i64 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.i128 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.u8 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.u16 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.u32 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.u64 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								.u128 => |n| {
-									float_value = @intToFloat(T, n);
-									valid = true;
-								},
-								else => {},
+								.i8 => |n| float_value = @intToFloat(T, n),
+								.i16 => |n| float_value = @intToFloat(T, n),
+								.i32 => |n| float_value = @intToFloat(T, n),
+								.i64 => |n| float_value = @intToFloat(T, n),
+								.i128 => |n| float_value = @intToFloat(T, n),
+								.u8 => |n| float_value = @intToFloat(T, n),
+								.u16 => |n| float_value = @intToFloat(T, n),
+								.u32 => |n| float_value = @intToFloat(T, n),
+								.u64 => |n| float_value = @intToFloat(T, n),
+								.u128 => |n|float_value = @intToFloat(T, n),
+								else => invalid_type = .type,
 							}
+						} else {
+							invalid_type = .type;
 						}
 					}
 				}
 
-				if (!valid) {
-					switch (untyped_value) {
-						.f32, .f64 => try context.add(self.bit_invalid),
-						else => try context.add(INVALID_TYPE),
-					}
-					return .{.null = {}};
+				switch (invalid_type) {
+					.none => {},
+					.min => {
+						try context.add(self.min_invalid);
+						return .{.null = {}};
+					},
+					.max => {
+						try context.add(self.max_invalid);
+						return .{.null = {}};
+					},
+					.type => {
+						try context.add(INVALID_TYPE);
+						return .{.null = {}};
+					},
 				}
 			}
 
@@ -193,14 +174,14 @@ pub fn Float(comptime T: type, comptime S: type) type {
 		}
 
 		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?T {
-			var int_value: ?T = null;
+			var float_value: ?T = null;
 			if (input) |string_value| {
-				int_value = std.fmt.parseFloat(T, string_value,) catch {
+				float_value = std.fmt.parseFloat(T, string_value,) catch {
 					try context.add(INVALID_TYPE);
 					return null;
 				};
 			}
-			return self.validate(int_value, context);
+			return self.validate(float_value, context);
 		}
 
 		pub fn validate(self: *const Self, optional_value: ?T, context: *Context(S)) !?T {
@@ -212,20 +193,14 @@ pub fn Float(comptime T: type, comptime S: type) type {
 				return self.executeFunction(null, context);
 			};
 
-			if (self.min) |m| {
-				std.debug.assert(self.min_invalid != null);
-				if (value < m) {
-					try context.add(self.min_invalid.?);
-					return null;
-				}
+			if (value < self.min) {
+				try context.add(self.min_invalid);
+				return null;
 			}
 
-			if (self.max) |m| {
-				std.debug.assert(self.max_invalid != null);
-				if (value > m) {
-					try context.add(self.max_invalid.?);
-					return null;
-				}
+			if (value > self.max) {
+				try context.add(self.max_invalid);
+				return null;
 			}
 
 			return self.executeFunction(value, context);
@@ -380,6 +355,7 @@ test "float: max" {
 	}
 
 	{
+		std.debug.print("HERE\n", .{});
 		t.reset(&context);
 		try t.expectEqual(typed.Value{.f64 = -33.2}, (try validator.validateValue(.{.f64 = -33.2}, &context)));
 		try t.expectEqual(true, context.isValid());
