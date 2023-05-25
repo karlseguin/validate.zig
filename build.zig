@@ -20,7 +20,6 @@ pub fn build(b: *std.Build) !void {
 	});
 
 	lib_test.addModule("typed", typed_module);
-	lib_test.addIncludePath("lib/regez");
 
 	const run_test = b.addRunArtifact(lib_test);
 	run_test.has_side_effects = true;

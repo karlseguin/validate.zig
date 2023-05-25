@@ -355,7 +355,6 @@ test "float: max" {
 	}
 
 	{
-		std.debug.print("HERE\n", .{});
 		t.reset(&context);
 		try t.expectEqual(typed.Value{.f64 = -33.2}, (try validator.validateValue(.{.f64 = -33.2}, &context)));
 		try t.expectEqual(true, context.isValid());

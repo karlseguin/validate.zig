@@ -25,16 +25,6 @@ pub fn Builder(comptime S: type) type {
 		arena: *ArenaAllocator,
 		allocator: Allocator,
 
-		// This library heavily leans on arena allocators. Every validator is
-		// created within this arena. Validators can't be individually freed
-		// only freeing this arena (via builder.deinit).
-		// Since we generallly expect things to be long lived, this works fine.
-		// Except...our String validator uses Posix's regex.h for pattern matching
-		// and this C library allocates memory directly (malloc). So when we clear
-		// the arena, the memory allocated by regex.h isn't freed. The solution is
-		// to keep track of every regex_t * that we create and free them.
-		regexes: std.ArrayList(*re.regex_t),
-
 		const Self = @This();
 
 		pub fn init(allocator: Allocator) !Self {
@@ -47,15 +37,10 @@ pub fn Builder(comptime S: type) type {
 			return .{
 				.arena = arena,
 				.allocator = arena.allocator(),
-				.regexes = std.ArrayList(*re.regex_t).init(arena.allocator()),
 			};
 		}
 
 		pub fn deinit(self: Self, allocator: Allocator) void {
-			for (self.regexes.items) |regex| {
-				re.regfree(regex);
-			}
-
 			self.arena.deinit();
 			allocator.destroy(self.arena);
 		}
@@ -99,10 +84,6 @@ pub fn Builder(comptime S: type) type {
 		pub fn tryString(self: *Self, config: String(S).Config) !*String(S) {
 			const val = try self.allocator.create(String(S));
 			val.* = try String(S).init(self.allocator, config);
-
-			if (val.regex) |regex| {
-				try self.regexes.append(regex);
-			}
 			return val;
 		}
 		pub fn string(self: *Self, config: String(S).Config) *String(S) {

@@ -1,7 +1,6 @@
 const std = @import("std");
 const typed = @import("typed");
 const v = @import("validate.zig");
-const re = @cImport(@cInclude("regez.h"));
 
 const codes = v.codes;
 const Builder = v.Builder;
@@ -10,9 +9,6 @@ const Validator = v.Validator;
 const DataBuilder = v.DataBuilder;
 
 const Allocator = std.mem.Allocator;
-
-const REGEX_T_SIZEOF = re.sizeof_regex_t;
-const REGEX_T_ALIGNOF = re.alignof_regex_t;
 
 const INVALID_TYPE = v.Invalid{
 	.code = codes.TYPE_STRING,
@@ -50,9 +46,7 @@ pub fn String(comptime S: type) type {
 		function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8,
 		invalid_min: ?v.Invalid,
 		invalid_max: ?v.Invalid,
-		invalid_pattern: ?v.Invalid,
 		invalid_choices: ?v.Invalid,
-		regex: ?*re.regex_t,
 
 		const Self = @This();
 
@@ -70,7 +64,6 @@ pub fn String(comptime S: type) type {
 			default: ?[]const u8 = null,
 			decode: ?EncodingType = null,
 			choices: ?[]const []const u8 = null,
-			pattern: ?[]const u8 = null,
 			function: ?*const fn(value: ?[]const u8, context: *Context(S)) anyerror!?[]const u8 = null,
 		};
 
@@ -117,19 +110,7 @@ pub fn String(comptime S: type) type {
 				};
 			}
 
-			var regex: ?*re.regex_t = null;
-			var invalid_pattern: ?v.Invalid = null;
-			if (config.pattern) |pattern| {
-				regex = try allocateRegex(allocator, pattern);
-				invalid_pattern = v.Invalid{
-					.err = "is not valid",
-					.code = codes.STRING_PATTERN,
-					.data = try DataBuilder.init(allocator).put("pattern", pattern).done(),
-				};
-			}
-
 			return .{
-				.regex = regex,
 				.min = config.min,
 				.max = config.max,
 				.decode = config.decode,
@@ -139,7 +120,6 @@ pub fn String(comptime S: type) type {
 				.function = config.function,
 				.invalid_min = invalid_min,
 				.invalid_max = invalid_max,
-				.invalid_pattern = invalid_pattern,
 				.invalid_choices = invalid_choices,
 			};
 		}
@@ -245,14 +225,6 @@ pub fn String(comptime S: type) type {
 				}
 			}
 
-			if (self.regex) |regex| {
-				const valueZ = try context.allocator.dupeZ(u8, value);
-				if (!re.isMatch(regex, valueZ)) {
-					try context.add(self.invalid_pattern.?);
-					return null;
-				}
-			}
-
 			choice_blk: {
 				if (self.choices) |choices| {
 					std.debug.assert(self.invalid_choices != null);
@@ -273,25 +245,6 @@ pub fn String(comptime S: type) type {
 			return value orelse self.default;
 		}
 	};
-}
-
-fn allocateRegex(allocator: Allocator, pattern: []const u8) !*re.regex_t {
-	if (pattern.len > 254) {
-		return error.PatternTooLong;
-	}
-
-	var pattern_buffer: [255:0]u8 = undefined;
-	std.mem.copy(u8, &pattern_buffer, pattern);
-	pattern_buffer[pattern.len] = 0;
-
-	const bufferZ = pattern_buffer;
-	var slice = try allocator.alignedAlloc(u8, REGEX_T_ALIGNOF, REGEX_T_SIZEOF);
-	const regex = @ptrCast(*re.regex_t, slice.ptr);
-
-	if (re.regcomp(regex, &bufferZ, re.REG_EXTENDED | re.REG_NOSUB) != 0) {
-		return error.InvalidPattern;
-	}
-	return regex;
 }
 
 const t = @import("t.zig");
@@ -500,36 +453,6 @@ test "string: function" {
 		t.reset(&context);
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "fail"}, &context));
 		try t.expectInvalid(.{.code = 999, .err = "string validation error"}, context);
-	}
-}
-
-test "string: pattern" {
-	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
-	defer context.deinit(t.allocator);
-
-	var builder = try Builder(void).init(t.allocator);
-	defer builder.deinit(t.allocator);
-
-	const validator = builder.string(.{.pattern = "[ab]c"});
-
-	{
-		try t.expectEqual(typed.Value{.string = "ac"}, try validator.validateValue(.{.string = "ac"}, &context));
-		try t.expectEqual(true, context.isValid());
-
-		try t.expectEqual(typed.Value{.string = "bc"}, try validator.validateValue(.{.string = "bc"}, &context));
-		try t.expectEqual(true, context.isValid());
-	}
-
-	{
-		t.reset(&context);
-		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "AZ"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data = .{.pattern = "[ab]c"}}, context);
-	}
-
-	{
-		t.reset(&context);
-		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "Ac"}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_PATTERN, .data = .{.pattern = "[ab]c"}}, context);
 	}
 }
 
