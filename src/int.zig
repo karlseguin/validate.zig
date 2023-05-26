@@ -154,11 +154,38 @@ pub fn Int(comptime T: type, comptime S: type) type {
 						} else int_value = @intCast(T, n);
 					},
 					.string => |s| blk: {
-						if (self.parse) {
-							int_value = std.fmt.parseInt(T, s, 10) catch {
-								invalid_type = .type;
-								break :blk;
-							};
+						if (self.parse and s.len != 0) {
+							// We want to try to give a good min or max error message, so
+							// we can't just parse into T. We need to parse into > T and then
+							// check against T_MIN and T_MAX
+							// So we need to parse into T+1, but I don't know if that's possible
+							// so I'll just handle T's <= 64 by trying to parse into i64/u64.
+							// For larger T's, we'll just have a generic "not an int" error.
+							const ti = @typeInfo(T).Int;
+							if (ti.bits <= 64) {
+								if (ti.signedness == .signed) {
+									const n = std.fmt.parseInt(i64, s, 10) catch {
+										invalid_type = .type;
+										break :blk;
+									};
+									if (n < T_MIN) { invalid_type = .min;
+									} else if (n > T_MAX) { invalid_type = .max;
+									} else int_value = @intCast(T, n);
+								} else {
+									const n = std.fmt.parseInt(u64, s, 10) catch {
+										invalid_type = .type;
+										break :blk;
+									};
+									if (n < T_MIN) { invalid_type = .min;
+									} else if (n > T_MAX) { invalid_type = .max;
+									} else int_value = @intCast(T, n);
+								}
+							} else {
+								int_value = std.fmt.parseInt(T, s, 10) catch {
+									invalid_type = .type;
+									break :blk;
+								};
+							}
 						} else {
 							invalid_type = .type;
 						}
@@ -424,6 +451,25 @@ test "int: implicit min and max" {
 		try t.expectEqual(nullValue, try validator.validateValue(.{.i64 = max_int + 1}, &context));
 		try t.expectInvalid(.{.code = codes.INT_MAX, .data = .{.max = max_int}}, context);
 	}
+}
+
+test "int: implicit min and max with string parsing" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.int(i16, .{.parse = true});
+	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "35000"}, &context));
+	try t.expectInvalid(.{.code = codes.INT_MAX, .data = .{.max = 32767}}, context);
+
+	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "-35000"}, &context));
+	try t.expectInvalid(.{.code = codes.INT_MIN, .data = .{.min = -32768}}, context);
+
+	t.reset(&context);
+	try t.expectEqual(@as(i16, -43), (try validator.validateValue(.{.string = "-43"}, &context)).i16);
+	try t.expectEqual(true, context.isValid());
 }
 
 test "int: implicit type cast" {
