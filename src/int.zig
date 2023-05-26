@@ -159,27 +159,18 @@ pub fn Int(comptime T: type, comptime S: type) type {
 							// we can't just parse into T. We need to parse into > T and then
 							// check against T_MIN and T_MAX
 							// So we need to parse into T+1, but I don't know if that's possible
-							// so I'll just handle T's <= 64 by trying to parse into i64/u64.
-							// For larger T's, we'll just have a generic "not an int" error.
+							// so I'll just handle T's <= 64 by trying to parse into i64.
+							// For larger T's (including u64),  we'll just have a generic
+							// "not an int" error.
 							const ti = @typeInfo(T).Int;
 							if (ti.bits <= 64) {
-								if (ti.signedness == .signed) {
-									const n = std.fmt.parseInt(i64, s, 10) catch {
-										invalid_type = .type;
-										break :blk;
-									};
-									if (n < T_MIN) { invalid_type = .min;
-									} else if (n > T_MAX) { invalid_type = .max;
-									} else int_value = @intCast(T, n);
-								} else {
-									const n = std.fmt.parseInt(u64, s, 10) catch {
-										invalid_type = .type;
-										break :blk;
-									};
-									if (n < T_MIN) { invalid_type = .min;
-									} else if (n > T_MAX) { invalid_type = .max;
-									} else int_value = @intCast(T, n);
-								}
+								const n = std.fmt.parseInt(i64, s, 10) catch {
+									invalid_type = .type;
+									break :blk;
+								};
+								if (n < T_MIN) { invalid_type = .min;
+								} else if (n > T_MAX) { invalid_type = .max;
+								} else int_value = @intCast(T, n);
 							} else {
 								int_value = std.fmt.parseInt(T, s, 10) catch {
 									invalid_type = .type;
