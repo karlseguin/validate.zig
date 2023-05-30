@@ -46,6 +46,10 @@ pub fn FieldValidator(comptime S: type) type {
 pub fn Object(comptime S: type) type {
 	return struct {
 		required: bool,
+		min: ?usize,
+		max: ?usize,
+		invalid_min: ?v.Invalid,
+		invalid_max: ?v.Invalid,
 		fields: std.StringHashMap(FieldValidator(S)),
 		function: ?*const fn(value: ?typed.Map, context: *Context(S)) anyerror!?typed.Map,
 
@@ -53,15 +57,41 @@ pub fn Object(comptime S: type) type {
 
 		pub const Config = struct {
 			required: bool = false,
+			min: ?usize = null,
+			max: ?usize = null,
 			nest: ?[]const []const u8 = null,
 			function: ?*const fn(value: ?typed.Map, context: *Context(S)) anyerror!?typed.Map = null,
 		};
 
-		pub fn init(_: Allocator, fields: std.StringHashMap(FieldValidator(S)), config: Config) !Self {
+		pub fn init(allocator: Allocator, fields: std.StringHashMap(FieldValidator(S)), config: Config) !Self {
+			var invalid_min: ?v.Invalid = null;
+			if (config.min) |m| {
+				const plural = if (m == 1) "" else "s";
+				invalid_min = v.Invalid{
+					.code = codes.OBJECT_LEN_MIN,
+					.data = try DataBuilder.init(allocator).put("min", m).done(),
+					.err = try std.fmt.allocPrint(allocator, "must have at least {d} item{s}", .{m, plural}),
+				};
+			}
+
+			var invalid_max: ?v.Invalid = null;
+			if (config.max) |m| {
+				const plural = if (m == 1) "" else "s";
+				invalid_max = v.Invalid{
+					.code = codes.OBJECT_LEN_MAX,
+					.data = try DataBuilder.init(allocator).put("max", m).done(),
+					.err = try std.fmt.allocPrint(allocator, "must no more than {d} item{s}", .{m, plural}),
+				};
+			}
+
 			return .{
 				.fields = fields,
-				.function = config.function,
+				.min = config.min,
+				.max = config.max,
 				.required = config.required,
+				.invalid_min = invalid_min,
+				.invalid_max = invalid_max,
+				.function = config.function,
 			};
 		}
 
@@ -148,6 +178,23 @@ pub fn Object(comptime S: type) type {
 				return self.executeFunction(null, context);
 			};
 
+			const count = value.count();
+			if (self.min) |m| {
+				std.debug.assert(self.invalid_min != null);
+				if (count < m) {
+					try context.add(self.invalid_min.?);
+					return null;
+				}
+			}
+
+			if (self.max) |m| {
+				std.debug.assert(self.invalid_max != null);
+				if (count > m) {
+					try context.add(self.invalid_max.?);
+					return null;
+				}
+			}
+
 			context.object = value;
 
 			const fields = self.fields;
@@ -224,6 +271,46 @@ test "object: type" {
 	const validator = builder.object(&.{}, .{});
 	try t.expectEqual(nullValue, try validator.validateValue(.{.string = "Hi"}, &context));
 	try t.expectInvalid(.{.code = codes.TYPE_OBJECT}, context);
+}
+
+test "object: min" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.object(&.{}, .{.min = 2});
+	{
+		_ = try validator.validateJsonS("{\"a\": 1}", &context);
+		try t.expectInvalid(.{.code = codes.OBJECT_LEN_MIN, .data = .{.min = 2}}, context);
+	}
+
+	{
+		t.reset(&context);
+		_ = try validator.validateJsonS("{\"a\": 1, \"b\": 2}", &context);
+		try t.expectEqual(true, context.isValid());
+	}
+}
+
+test "object: max" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 2}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.object(&.{}, .{.max = 2});
+	{
+		_ = try validator.validateJsonS("{\"a\": 1, \"b\": 2, \"c\": 3}", &context);
+		try t.expectInvalid(.{.code = codes.OBJECT_LEN_MAX, .data = .{.max = 2}}, context);
+	}
+
+	{
+		t.reset(&context);
+		_ = try validator.validateJsonS("{\"a\": 1, \"b\": 2}", &context);
+		try t.expectEqual(true, context.isValid());
+	}
 }
 
 test "object: field" {
