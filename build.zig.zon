@@ -3,8 +3,8 @@
 	.version = "0.0.0",
 	.dependencies = .{
 		.typed = .{
-			.url = "https://github.com/karlseguin/typed.zig/archive/0980cb9e827de26e9b01a9b600a057420433772a.tar.gz",
-			.hash = "1220df3e77ce82398ab4c70fbe662550bda818845a309c619e1c8b79f0752f1a4988"
+			.url = "https://github.com/karlseguin/typed.zig/archive/54109a28b3270505be6712481ddb6911044e66c1.tar.gz",
+			.hash = "1220cccca0bf957737c3a46546b097255d23a5928a2d50be228ce1248b08662a9a57"
 		}
 	},
 }
