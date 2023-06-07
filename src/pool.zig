@@ -74,6 +74,7 @@ pub fn Pool(comptime S: type) type {
 		}
 
 		pub fn release(self: *Self, context: *Context) void {
+			context.reset();
 			const contexts = self.contexts;
 
 			self.mutex.lock();
@@ -87,7 +88,6 @@ pub fn Pool(comptime S: type) type {
 				return;
 			}
 
-			context.reset();
 			defer self.mutex.unlock();
 			contexts[available] = context;
 			self.available = available + 1;
@@ -161,7 +161,7 @@ fn testPool(p: *Pool(bool)) void {
 		std.debug.assert(c.state == true);
 		c.state = false;
 		std.time.sleep(random.uintAtMost(u32, 100000));
-		c.state = true;
+		std.debug.assert(c.state == false);
 		p.release(c);
 	}
 }
