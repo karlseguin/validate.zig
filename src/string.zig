@@ -212,7 +212,13 @@ pub fn String(comptime S: type) type {
 			if (self.min) |m| {
 				std.debug.assert(self.invalid_min != null);
 				if (value.len < m) {
-					try context.add(self.invalid_min.?);
+					if (value.len == 0 and m == 1) {
+						// "Required" is a more user-friendly error message when the input
+						// is blank and min is set to 1.
+						try context.add(v.required);
+					} else {
+						try context.add(self.invalid_min.?);
+					}
 					return null;
 				}
 			}
@@ -326,7 +332,7 @@ test "string: min length" {
 	const singular = builder.string(.{.min = 1});
 	{
 		try t.expectEqual(nullValue, try singular.validateValue(.{.string = ""}, &context));
-		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data = .{.min = 1}, .err = "must have at least 1 character"}, context);
+		try t.expectInvalid(.{.code = codes.REQUIRED}, context);
 	}
 }
 
