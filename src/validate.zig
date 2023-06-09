@@ -32,7 +32,7 @@ pub const InvalidField = struct {
 	field: ?[]const u8,
 	code: i64,
 	err: []const u8,
-	data: ?typed.Value,
+	data: ?typed.Value = null,
 };
 
 pub const required = Invalid{
