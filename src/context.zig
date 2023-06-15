@@ -274,7 +274,23 @@ test "context: addInvalidField with generic data" {
 	var arr = std.ArrayList(u8).init(t.allocator);
 	defer arr.deinit();
 	try std.json.stringify(ctx.errors(), .{.emit_null_optional_fields = false}, arr.writer());
-	try t.expectString("[{\"field\":\"f1\",\"code\":9101,\"err\":\"nope, cannot\",\"data\":{\"d1\":null,\"d3\":3,\"d2\":true,\"d4\":-2.3,\"d5\":\"9000\"}}]", arr.items);
+
+	var parser = std.json.Parser.init(t.allocator, .alloc_always);
+	defer parser.deinit();
+	var tree = (try parser.parse(arr.items));
+	defer tree.deinit();
+
+	var actual = tree.root.array.items[0].object;
+
+	try t.expectString("f1", actual.get("field").?.string);
+	try t.expectEqual(@as(i64, 9101), actual.get("code").?.integer);
+	try t.expectString("nope, cannot", actual.get("err").?.string);
+	const data = actual.get("data").?.object;
+	try t.expectEqual({}, data.get("d1").?.null);
+	try t.expectEqual(true, data.get("d2").?.bool);
+	try t.expectEqual(@as(i64, 3), data.get("d3").?.integer);
+	try t.expectEqual(@as(f64, -2.3), data.get("d4").?.float);
+	try t.expectString("9000", data.get("d5").?.string);
 }
 
 test "context: reset" {
