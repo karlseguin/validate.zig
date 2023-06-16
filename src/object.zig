@@ -373,6 +373,12 @@ test "object: nested" {
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.score"}, context);
 		try t.expectInvalid(.{.code = codes.REQUIRED, .field = "user.enabled"}, context);
 	}
+
+	{
+		t.reset(&context);
+		_ = try dataValidator.validateJsonS("{\"user\": {\"id\": \"fb1d682b-9c62-49fc-b32c-8a8062a86c14\",\"any\":3,\"age\": 901,\"name\":\"Leto\",\"score\":3.14,\"enabled\":true}}", &context);
+		try t.expectEqual(true, context.isValid());
+	}
 }
 
 test "object: forced nesting" {
