@@ -164,7 +164,8 @@ pub fn Int(comptime T: type, comptime S: type) type {
 							// "not an int" error.
 							const ti = @typeInfo(T).Int;
 							if (ti.bits <= 64) {
-								const n = std.fmt.parseInt(i64, s, 10) catch {
+
+								const n = std.fmt.parseInt(if (ti.signedness == .signed) i64 else u64, s, 10) catch {
 									invalid_type = .type;
 									break :blk;
 								};
@@ -469,7 +470,7 @@ test "int: implicit type cast" {
 
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
-	const utypes = [_]type{u8, u16, u32};
+	const utypes = [_]type{u8, u16, u32, u64};
 	inline for (utypes) |utype| {
 		const max_int = std.math.maxInt(utype);
 		const validator = builder.int(utype, .{});
@@ -481,7 +482,7 @@ test "int: implicit type cast" {
 		try t.expectEqual(true, context.isValid());
 	}
 
-	const itypes = [_]type{i8, i16, i32};
+	const itypes = [_]type{i8, i16, i32, i64};
 	inline for (itypes) |itype| {
 		const min_int = std.math.minInt(itype);
 		const max_int = std.math.maxInt(itype);

@@ -116,7 +116,6 @@ pub fn Context(comptime S: type) type {
 				}
 			}
 
-
 			self.addInvalidField(v.InvalidField{
 				.code = invalid.code,
 				.field = field_path,
