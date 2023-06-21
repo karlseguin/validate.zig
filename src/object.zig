@@ -123,12 +123,8 @@ pub fn Object(comptime S: type) type {
 
 		pub fn validateJsonS(self: *Self, data: []const u8, context: *Context(S)) !typed.Map {
 			const allocator = context.allocator; // an arena allocator
-			var parser = std.json.Parser.init(allocator, .alloc_always);
-			defer parser.deinit();
-
-			var tree = parser.parse(data) catch return error.InvalidJson;
-
-			return self.validateJsonV(tree.root, context);
+			var parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, data, .{}) catch return error.InvalidJson;
+			return self.validateJsonV(parsed, context);
 		}
 
 		pub fn validateJsonV(self: *Self, optional_json_value: ?std.json.Value, context: *Context(S)) !typed.Map {

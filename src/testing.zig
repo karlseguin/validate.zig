@@ -17,13 +17,10 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
 		var js = try std.json.stringifyAlloc(allocator, e.data, .{});
 		defer allocator.free(js);
 
-		var parser = std.json.Parser.init(allocator, .alloc_always);
+		var parser = try std.json.parseFromSlice(std.json.Value, allocator, js, .{});
 		defer parser.deinit();
 
-		var vt = try parser.parse(js);
-		defer vt.deinit();
-
-		const expected_typed = try typed.fromJson(allocator, vt.root);
+		const expected_typed = try typed.fromJson(allocator, parser.value);
 		defer expected_typed.deinit();
 
 		expected_data = try std.json.stringifyAlloc(allocator, expected_typed, .{});

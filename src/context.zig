@@ -274,12 +274,10 @@ test "context: addInvalidField with generic data" {
 	defer arr.deinit();
 	try std.json.stringify(ctx.errors(), .{.emit_null_optional_fields = false}, arr.writer());
 
-	var parser = std.json.Parser.init(t.allocator, .alloc_always);
+	var parser = try std.json.parseFromSlice(std.json.Value, t.allocator, arr.items, .{});
 	defer parser.deinit();
-	var tree = (try parser.parse(arr.items));
-	defer tree.deinit();
 
-	var actual = tree.root.array.items[0].object;
+	var actual = parser.value.array.items[0].object;
 
 	try t.expectString("f1", actual.get("field").?.string);
 	try t.expectEqual(@as(i64, 9101), actual.get("code").?.integer);

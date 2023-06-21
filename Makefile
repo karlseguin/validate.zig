@@ -1,3 +1,3 @@
 .PHONY: t
 t:
-	zig build test -fsummary -freference-trace
+	zig build test --summary all -freference-trace
