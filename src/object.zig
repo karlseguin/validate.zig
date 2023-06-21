@@ -80,7 +80,7 @@ pub fn Object(comptime S: type) type {
 				invalid_max = v.Invalid{
 					.code = codes.OBJECT_LEN_MAX,
 					.data = try DataBuilder.init(allocator).put("max", m).done(),
-					.err = try std.fmt.allocPrint(allocator, "must no more than {d} item{s}", .{m, plural}),
+					.err = try std.fmt.allocPrint(allocator, "must have no more than {d} item{s}", .{m, plural}),
 				};
 			}
 
