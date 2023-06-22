@@ -132,16 +132,16 @@ pub fn Float(comptime T: type, comptime S: type) type {
 					else => {
 						if (!self.strict) {
 							switch (untyped_value) {
-								.i8 => |n| float_value = @intToFloat(T, n),
-								.i16 => |n| float_value = @intToFloat(T, n),
-								.i32 => |n| float_value = @intToFloat(T, n),
-								.i64 => |n| float_value = @intToFloat(T, n),
-								.i128 => |n| float_value = @intToFloat(T, n),
-								.u8 => |n| float_value = @intToFloat(T, n),
-								.u16 => |n| float_value = @intToFloat(T, n),
-								.u32 => |n| float_value = @intToFloat(T, n),
-								.u64 => |n| float_value = @intToFloat(T, n),
-								.u128 => |n|float_value = @intToFloat(T, n),
+								.i8 => |n| float_value = @floatFromInt(T, n),
+								.i16 => |n| float_value = @floatFromInt(T, n),
+								.i32 => |n| float_value = @floatFromInt(T, n),
+								.i64 => |n| float_value = @floatFromInt(T, n),
+								.i128 => |n| float_value = @floatFromInt(T, n),
+								.u8 => |n| float_value = @floatFromInt(T, n),
+								.u16 => |n| float_value = @floatFromInt(T, n),
+								.u32 => |n| float_value = @floatFromInt(T, n),
+								.u64 => |n| float_value = @floatFromInt(T, n),
+								.u128 => |n|float_value = @floatFromInt(T, n),
 								else => invalid_type = .type,
 							}
 						} else {
