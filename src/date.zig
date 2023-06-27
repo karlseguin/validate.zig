@@ -110,7 +110,7 @@ pub fn Date(comptime S: type) type {
 			}
 
 			if (try self.validate(date_value, context)) |value| {
-				return typed.new(value);
+				return typed.new(context.allocator, value);
 			}
 			return .{.null = {}};
 		}

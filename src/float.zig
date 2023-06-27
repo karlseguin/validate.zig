@@ -112,12 +112,12 @@ pub fn Float(comptime T: type, comptime S: type) type {
 					.f64 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else float_value = @floatCast(T, n);
+						} else float_value = @floatCast(n);
 					},
 					.f32 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else float_value = @floatCast(T, n);
+						} else float_value = @floatCast(n);
 					},
 					.string => |s| blk: {
 						if (self.parse) {
@@ -132,16 +132,16 @@ pub fn Float(comptime T: type, comptime S: type) type {
 					else => {
 						if (!self.strict) {
 							switch (untyped_value) {
-								.i8 => |n| float_value = @floatFromInt(T, n),
-								.i16 => |n| float_value = @floatFromInt(T, n),
-								.i32 => |n| float_value = @floatFromInt(T, n),
-								.i64 => |n| float_value = @floatFromInt(T, n),
-								.i128 => |n| float_value = @floatFromInt(T, n),
-								.u8 => |n| float_value = @floatFromInt(T, n),
-								.u16 => |n| float_value = @floatFromInt(T, n),
-								.u32 => |n| float_value = @floatFromInt(T, n),
-								.u64 => |n| float_value = @floatFromInt(T, n),
-								.u128 => |n|float_value = @floatFromInt(T, n),
+								.i8 => |n| float_value = @floatFromInt(n),
+								.i16 => |n| float_value = @floatFromInt(n),
+								.i32 => |n| float_value = @floatFromInt(n),
+								.i64 => |n| float_value = @floatFromInt(n),
+								.i128 => |n| float_value = @floatFromInt(n),
+								.u8 => |n| float_value = @floatFromInt(n),
+								.u16 => |n| float_value = @floatFromInt(n),
+								.u32 => |n| float_value = @floatFromInt(n),
+								.u64 => |n| float_value = @floatFromInt(n),
+								.u128 => |n|float_value = @floatFromInt(n),
 								else => invalid_type = .type,
 							}
 						} else {
@@ -168,7 +168,7 @@ pub fn Float(comptime T: type, comptime S: type) type {
 			}
 
 			if (try self.validate(float_value, context)) |value| {
-				return typed.new(value);
+				return typed.new(context.allocator, value);
 			}
 			return .{.null = {}};
 		}

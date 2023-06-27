@@ -106,52 +106,52 @@ pub fn Int(comptime T: type, comptime S: type) type {
 					.i64 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.i32 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.i16 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.i8 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.u64 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.u32 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.u16 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.u8 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.i128 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.u128 => |n| {
 						if (n < T_MIN) { invalid_type = .min;
 						} else if (n > T_MAX) { invalid_type = .max;
-						} else int_value = @intCast(T, n);
+						} else int_value = @intCast(n);
 					},
 					.string => |s| blk: {
 						if (self.parse and s.len != 0) {
@@ -171,7 +171,7 @@ pub fn Int(comptime T: type, comptime S: type) type {
 								};
 								if (n < T_MIN) { invalid_type = .min;
 								} else if (n > T_MAX) { invalid_type = .max;
-								} else int_value = @intCast(T, n);
+								} else int_value = @intCast(n);
 							} else {
 								int_value = std.fmt.parseInt(T, s, 10) catch {
 									invalid_type = .type;
@@ -203,7 +203,7 @@ pub fn Int(comptime T: type, comptime S: type) type {
 			}
 
 			if (try self.validate(int_value, context)) |value| {
-				return typed.new(value);
+				return typed.new(context.allocator, value);
 			}
 			return .{.null = {}};
 		}

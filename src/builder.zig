@@ -129,7 +129,7 @@ pub fn Builder(comptime S: type) type {
 		pub fn tryObject(self: Self, fields: []const FieldValidator(S), config: Object(S).Config) !*Object(S) {
 			const allocator = self.allocator;
 			var lookup = std.StringHashMap(FieldValidator(S)).init(allocator);
-			try lookup.ensureTotalCapacity(@intCast(u32, fields.len));
+			try lookup.ensureTotalCapacity(@intCast(fields.len));
 
 			for (fields) |fv| {
 				var f = fv.field;
@@ -184,4 +184,3 @@ pub fn Builder(comptime S: type) type {
 		}
 	};
 }
-
