@@ -123,7 +123,6 @@ pub fn Array(comptime S: type) type {
 			const items = value.items;
 
 			if (self.min) |m| {
-				std.debug.assert(self.invalid_min != null);
 				if (items.len < m) {
 					try context.add(self.invalid_min.?);
 					return null;
@@ -131,7 +130,6 @@ pub fn Array(comptime S: type) type {
 			}
 
 			if (self.max) |m| {
-				std.debug.assert(self.invalid_max != null);
 				if (items.len > m) {
 					try context.add(self.invalid_max.?);
 					return null;

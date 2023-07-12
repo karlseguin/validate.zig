@@ -136,7 +136,6 @@ pub fn Date(comptime S: type) type {
 			};
 
 			if (self.min) |m| {
-				std.debug.assert(self.min_invalid != null);
 				if (value.order(m) == .lt) {
 					try context.add(self.min_invalid.?);
 					return null;
@@ -144,7 +143,6 @@ pub fn Date(comptime S: type) type {
 			}
 
 			if (self.max) |m| {
-				std.debug.assert(self.max_invalid != null);
 				if (value.order(m) == .gt) {
 					try context.add(self.max_invalid.?);
 					return null;

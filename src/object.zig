@@ -176,7 +176,6 @@ pub fn Object(comptime S: type) type {
 
 			const count = value.count();
 			if (self.min) |m| {
-				std.debug.assert(self.invalid_min != null);
 				if (count < m) {
 					try context.add(self.invalid_min.?);
 					return null;
@@ -184,7 +183,6 @@ pub fn Object(comptime S: type) type {
 			}
 
 			if (self.max) |m| {
-				std.debug.assert(self.invalid_max != null);
 				if (count > m) {
 					try context.add(self.invalid_max.?);
 					return null;

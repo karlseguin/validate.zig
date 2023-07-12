@@ -68,23 +68,40 @@ pub fn String(comptime S: type) type {
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
+			var invalid_max: ?v.Invalid = null;
 			var invalid_min: ?v.Invalid = null;
-			if (config.min) |m| {
-				const plural = if (m == 1) "" else "s";
+
+			const has_min = config.min != null;
+			const has_max = config.max != null;
+
+			if (has_min and has_max) {
+				const min = config.min.?;
+				const max = config.max.?;
+				invalid_min = v.Invalid{
+					.code = codes.STRING_LEN,
+					.data = try DataBuilder.init(allocator).put("min", min).put("max", max).done(),
+					.err = try std.fmt.allocPrint(allocator, "must have {d} to {d} characters", .{min, max}),
+				};
+				invalid_max = v.Invalid{
+					.code = codes.STRING_LEN,
+					.data = try DataBuilder.init(allocator).put("min", min).put("max", max).done(),
+					.err = try std.fmt.allocPrint(allocator, "must have {d} to {d} characters", .{min, max}),
+				};
+			} else if (has_min) {
+				const min = config.min.?;
+				const plural = if (min == 1) "" else "s";
 				invalid_min = v.Invalid{
 					.code = codes.STRING_LEN_MIN,
-					.data = try DataBuilder.init(allocator).put("min", m).done(),
-					.err = try std.fmt.allocPrint(allocator, "must have at least {d} character{s}", .{m, plural}),
+					.data = try DataBuilder.init(allocator).put("min", min).done(),
+					.err = try std.fmt.allocPrint(allocator, "must have at least {d} character{s}", .{min, plural}),
 				};
-			}
-
-			var invalid_max: ?v.Invalid = null;
-			if (config.max) |m| {
-				const plural = if (m == 1) "" else "s";
+			} else if (has_max) {
+				const max = config.max.?;
+				const plural = if (max == 1) "" else "s";
 				invalid_max = v.Invalid{
 					.code = codes.STRING_LEN_MAX,
-					.data = try DataBuilder.init(allocator).put("max", m).done(),
-					.err = try std.fmt.allocPrint(allocator, "must have no more than {d} character{s}", .{m, plural}),
+					.data = try DataBuilder.init(allocator).put("max", max).done(),
+					.err = try std.fmt.allocPrint(allocator, "must have no more than {d} character{s}", .{max, plural}),
 				};
 			}
 
@@ -210,7 +227,6 @@ pub fn String(comptime S: type) type {
 			}
 
 			if (self.min) |m| {
-				std.debug.assert(self.invalid_min != null);
 				if (value.len < m) {
 					if (value.len == 0 and m == 1) {
 						// "Required" is a more user-friendly error message when the input
@@ -224,7 +240,6 @@ pub fn String(comptime S: type) type {
 			}
 
 			if (self.max) |m| {
-				std.debug.assert(self.invalid_max != null);
 				if (value.len > m) {
 					try context.add(self.invalid_max.?);
 					return null;
@@ -233,7 +248,6 @@ pub fn String(comptime S: type) type {
 
 			choice_blk: {
 				if (self.choices) |choices| {
-					std.debug.assert(self.invalid_choices != null);
 					for (choices) |choice| {
 						if (std.mem.eql(u8, choice, value)) break :choice_blk;
 					}
@@ -366,6 +380,38 @@ test "string: max length" {
 	{
 		try t.expectEqual(nullValue, try singular.validateValue(.{.string = "123"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data = .{.max = 1}, .err = "must have no more than 1 character"}, context);
+	}
+}
+
+test "string: min & max length" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.string(.{.min = 2, .max = 4});
+
+	{
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "abcde"}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_LEN, .data = .{.min = 2, .max = 4}, .err = "must have 2 to 4 characters"}, context);
+	}
+
+	{
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "a"}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_LEN, .data = .{.min = 2, .max = 4}, .err = "must have 2 to 4 characters"}, context);
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(typed.Value{.string = "abcd"}, try validator.validateValue(.{.string = "abcd"}, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(typed.Value{.string = "ab"}, try validator.validateValue(.{.string = "ab"}, &context));
+		try t.expectEqual(true, context.isValid());
 	}
 }
 
