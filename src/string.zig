@@ -38,6 +38,7 @@ const INVALID_BASE64_URL_SAFE_NO_PADDING = v.Invalid{
 pub fn String(comptime S: type) type {
 	return struct {
 		required: bool,
+		trim: bool,
 		min: ?usize,
 		max: ?usize,
 		default: ?[]const u8,
@@ -58,6 +59,7 @@ pub fn String(comptime S: type) type {
 		};
 
 		pub const Config = struct {
+			trim: bool = false,
 			min: ?usize = null,
 			max: ?usize = null,
 			required: bool = false,
@@ -130,6 +132,7 @@ pub fn String(comptime S: type) type {
 			return .{
 				.min = config.min,
 				.max = config.max,
+				.trim = config.trim,
 				.decode = config.decode,
 				.choices = owned_choices,
 				.default = config.default,
@@ -224,6 +227,10 @@ pub fn String(comptime S: type) type {
 				};
 
 				value = decoded;
+			}
+
+			if (self.trim) {
+				value = std.mem.trim(u8, value, &std.ascii.whitespace);
 			}
 
 			if (self.min) |m| {
@@ -533,6 +540,34 @@ test "string: encoding" {
 		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "aGVsbG8h"}, &context));
 		try t.expectInvalid(.{.code = codes.STRING_LEN_MAX, .data = .{.max = 5}}, context);
 	}
+}
+
+test "string: trim" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.string(.{.trim = true, .min = 2});
+
+	{
+		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectString("abc", (try validator.validateValue(.{.string = " \t\n abc \t\n\r  "}, &context)).string);
+		try t.expectEqual(true, context.isValid());
+	}
+
+	{
+		t.reset(&context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = " \t\n a \t\n\r  "}, &context));
+		try t.expectInvalid(.{.code = codes.STRING_LEN_MIN, .data = .{.min = 2}}, context);
+	}
+
 }
 
 fn testStringValidator(value: ?[]const u8, context: *Context(i64)) !?[]const u8 {
