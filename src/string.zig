@@ -231,6 +231,13 @@ pub fn String(comptime S: type) type {
 
 			if (self.trim) {
 				value = std.mem.trim(u8, value, &std.ascii.whitespace);
+				if (value.len == 0) {
+					if (self.required) {
+						try context.add(v.required);
+						return null;
+					}
+					return self.executeFunction(null, context);
+				}
 			}
 
 			if (self.min) |m| {
