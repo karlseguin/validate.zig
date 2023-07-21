@@ -78,7 +78,7 @@ The above sample outputs the validation errors as JSON to stdout. Given the `jso
 ```json
 [
     {"field": "year" ,"code": 4, "err": "must be an int"},
-    {"field": "title" ,"code": 1, "err": "is required"},
+    {"field": "title" ,"code": 1, "err": "required"},
     {"field": "score", "code": 14, "err": "cannot be greater than 10", "data": {"max": 1.0e+01}},
     {"field": "tags.0", "code": 10, "err": "must be one of: action, sci-fi, drama", "data": {"valid": ["action", "sci-fi", "drama"]}}
 ]
