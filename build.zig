@@ -9,6 +9,8 @@ pub fn build(b: *std.Build) !void {
 		.optimize = optimize,
 	}).module("typed");
 
+	// const typed_module = b.addModule("typed", .{.source_file = .{.path = "../../karl/typed.zig/src/typed.zig"}});
+
 	_ = b.addModule("validate", .{
 		.source_file = .{.path = "src/validate.zig"},
 		.dependencies = &.{ .{.name = "typed", .module = typed_module }},

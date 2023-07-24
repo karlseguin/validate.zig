@@ -65,7 +65,7 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
 	var arr = std.ArrayList(u8).init(allocator);
 	defer arr.deinit();
 
-	try std.json.stringify(errors, .{.whitespace = .{.indent_level = 1}}, arr.writer());
+	try std.json.stringify(errors, .{.whitespace = .indent_1}, arr.writer());
 	std.debug.print("\nReceived these errors:\n {s}\n", .{arr.items});
 
 	return error.MissingExpectedInvalid;

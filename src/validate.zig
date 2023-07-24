@@ -37,7 +37,7 @@ pub const InvalidField = struct {
 
 pub const required = Invalid{
 	.code = codes.REQUIRED,
-	.err = "required",
+	.err = "is required",
 };
 
 pub fn simpleField(name: []const u8) Field {
