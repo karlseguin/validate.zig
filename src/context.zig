@@ -141,7 +141,7 @@ pub fn Context(comptime S: type) type {
 		}
 
 		pub fn endArray(self: *Self) void {
-			var ni = self._nesting_idx.?;
+			const ni = self._nesting_idx.?;
 			if (ni == 0) {
 				self._nesting_idx = null;
 			} else {

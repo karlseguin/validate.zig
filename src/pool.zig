@@ -94,7 +94,7 @@ pub fn Pool(comptime S: type) type {
 		}
 
 		fn createContext(allocator: Allocator, config: Context.Config) !*Context{
-			var context = try allocator.create(Context);
+			const context = try allocator.create(Context);
 			context.* = try Context.init(allocator, config, undefined);
 			return context;
 		}
@@ -105,16 +105,16 @@ test "pool: acquires & release" {
 	var p = try Pool(void).init(t.allocator, .{.size = 2, .max_errors = 1, .max_nesting = 1});
 	defer p.deinit();
 
-	var c1a = try p.acquire({});
-	var c2a = try p.acquire({});
-	var c3a = try p.acquire({});
+	const c1a = try p.acquire({});
+	const c2a = try p.acquire({});
+	const c3a = try p.acquire({});
 
 	try t.expectEqual(false, c1a == c2a);
 	try t.expectEqual(false, c2a == c3a);
 
 	p.release(c1a);
 
-	var c1b = try p.acquire({});
+	const c1b = try p.acquire({});
 	try t.expectEqual(true, c1a == c1b);
 
 	p.release(c3a);

@@ -14,7 +14,7 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
 		// we go through all of this so that both actual and expected are serialized
 		// as typed.Value (and thus, serialize the same, e.g. floats use the same
 		// formatting options)
-		var js = try std.json.stringifyAlloc(allocator, e.data, .{});
+		const js = try std.json.stringifyAlloc(allocator, e.data, .{});
 		defer allocator.free(js);
 
 		var parser = try std.json.parseFromSlice(std.json.Value, allocator, js, .{});

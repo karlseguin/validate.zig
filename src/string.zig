@@ -220,7 +220,7 @@ pub fn String(comptime S: type) type {
 					return null;
 				};
 
-				var decoded = try context.allocator.alloc(u8, n);
+				const decoded = try context.allocator.alloc(u8, n);
 				decoder.decode(decoded, value) catch {
 					try context.add(invalid);
 					return null;
@@ -463,10 +463,10 @@ test "string: choices" {
 
 	var validator2: *String(void) = undefined;
 	{
-		var c1 = try t.allocator.alloc(u8, 5);
+		const c1 = try t.allocator.alloc(u8, 5);
 		std.mem.copy(u8, c1, "hello");
 
-		var c2 = try t.allocator.alloc(u8, 3);
+		const c2 = try t.allocator.alloc(u8, 3);
 		std.mem.copy(u8, c2, "you");
 
 		var choices2 = try t.allocator.alloc([]u8, 2);
