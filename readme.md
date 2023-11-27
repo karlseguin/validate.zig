@@ -340,7 +340,7 @@ const names_validator = builder.array(name_validator, .{
 
     // a custom validation function that will receive the value to validate
     // along with a validation.Context.
-    .function = ?*const fn(value: ?json.Array, context: *Context(S)) anyerror!?json.Array = null,
+    .function = ?*const fn(value: ?typed.Array, context: *Context(S)) anyerror!?typed.Array = null,
 });
 ```
 
@@ -363,7 +363,7 @@ var user_validator = builder.object(name_validator, &.{
 
     // a custom validation function that will receive the value to validate
     // along with a validation.Context
-    function: ?*const fn(value: ?json.ObjectMap, context: *Context(S)) anyerror!?json.ObjectMap = null,
+    function: ?*const fn(value: ?typed.Map, context: *Context(S)) anyerror!?typed.Map = null,
 });
 ```
 
