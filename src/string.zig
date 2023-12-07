@@ -116,7 +116,7 @@ pub fn String(comptime S: type) type {
 				var owned = try allocator.alloc([]u8, choices.len);
 				for (choices, 0..) |choice, i| {
 					owned[i] = try allocator.alloc(u8, choice.len);
-					std.mem.copy(u8, owned[i], choice);
+					@memcpy(owned[i], choice);
 					choice_data.appendAssumeCapacity(.{.string = owned[i]});
 				}
 				owned_choices = owned;
@@ -463,11 +463,8 @@ test "string: choices" {
 
 	var validator2: *String(void) = undefined;
 	{
-		const c1 = try t.allocator.alloc(u8, 5);
-		std.mem.copy(u8, c1, "hello");
-
-		const c2 = try t.allocator.alloc(u8, 3);
-		std.mem.copy(u8, c2, "you");
+		const c1 = try t.allocator.dupe(u8, "hello");
+		const c2 = try t.allocator.dupe(u8, "you");
 
 		var choices2 = try t.allocator.alloc([]u8, 2);
 		choices2[0] = c1;

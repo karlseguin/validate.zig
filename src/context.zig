@@ -187,7 +187,7 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
 			pos += std.fmt.formatIntBuf(buf, indexes[index], 10, .lower, .{});
 			index += 1;
 	} else {
-		std.mem.copy(u8, buf, first);
+		@memcpy(buf[0..first.len], first);
 		pos += first.len;
 	}
 
@@ -201,8 +201,9 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
 		} else {
 			buf[pos] = '.';
 			pos += 1;
-			std.mem.copy(u8, buf[pos..], part);
-			pos += part.len;
+			const end = pos + part.len;
+			@memcpy(buf[pos..end], part);
+			pos = end;
 		}
 	}
 
