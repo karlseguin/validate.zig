@@ -12,8 +12,8 @@ pub fn build(b: *std.Build) !void {
 	// const typed_module = b.addModule("typed", .{.source_file = .{.path = "../../karl/typed.zig/src/typed.zig"}});
 
 	_ = b.addModule("validate", .{
-		.source_file = .{.path = "src/validate.zig"},
-		.dependencies = &.{ .{.name = "typed", .module = typed_module }},
+		.root_source_file = .{.path = "src/validate.zig"},
+		.imports = &.{ .{.name = "typed", .module = typed_module }},
 	});
 
 	const lib_test = b.addTest(.{
@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) !void {
 		.optimize = optimize,
 	});
 
-	lib_test.addModule("typed", typed_module);
+	lib_test.root_module.addImport("typed", typed_module);
 
 	const run_test = b.addRunArtifact(lib_test);
 	run_test.has_side_effects = true;
