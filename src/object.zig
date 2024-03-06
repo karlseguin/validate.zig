@@ -427,18 +427,18 @@ test "object: change value" {
 	{
 		const to = try object_validator.validateJsonS("{\"name\": \"normal\", \"c\": 33}", &context);
 		try t.expectEqual(true, context.isValid());
-		try t.expectString("normal", to.get([]const u8, "name").?);
+		try t.expectString("normal", to.get("name").?.string);
 	}
 
 	{
 		const to = try object_validator.validateJsonS("{\"name\": \"!\", \"c\":33}", &context);
 		try t.expectEqual(true, context.isValid());
-		try t.expectString("abc", to.get([]u8, "name").?);
+		try t.expectString("abc", to.get("name").?.string);
 	}
 }
 
 fn testObjectChangeValue(value: ?[]const u8, ctx: *Context(void)) !?[]const u8 {
-	std.debug.assert(ctx.object.get(i64, "c").? == 33);
+	std.debug.assert(ctx.object.get("c").?.i64 == 33);
 
 	if (value.?[0] == '!') {
 		return "abc";

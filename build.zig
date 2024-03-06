@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) !void {
 		.optimize = optimize,
 	}).module("typed");
 
-	// const typed_module = b.addModule("typed", .{.source_file = .{.path = "../../karl/typed.zig/src/typed.zig"}});
+	// const typed_module = b.addModule("typed", .{.root_source_file = .{.path = "../typed.zig/src/typed.zig"}});
 
 	_ = b.addModule("validate", .{
 		.root_source_file = .{.path = "src/validate.zig"},

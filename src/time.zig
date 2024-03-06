@@ -96,7 +96,7 @@ pub fn Time(comptime S: type) type {
 					},
 					.string => |s| blk: {
 						if (self.parse) {
-							time_value = typed.Time.parse(s) catch break :blk;
+							time_value = typed.Time.parse(s, .rfc3339) catch break :blk;
 							valid = true;
 						}
 					},
@@ -172,7 +172,7 @@ test "time: required" {
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const default = try typed.Time.parse("08:27:33.923911");
+	const default = try typed.Time.parse("08:27:33.923911", .rfc3339);
 	const not_required = builder.time(.{.required = false});
 	const required = not_required.setRequired(true, &builder);
 	const not_required_default = builder.time(.{.required = false, .default = default });
@@ -197,7 +197,7 @@ test "time: required" {
 	{
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
-		const validator = builder.int(i64, .{.required = false});
+		const validator = builder.time(.{.required = false});
 		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -222,22 +222,22 @@ test "time: min" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.time(.{.min = try typed.Time.parse("10:05:10")});
+	const validator = builder.time(.{.min = try typed.Time.parse("10:05:10", .rfc3339)});
 	{
-		try t.expectEqual(nullValue, try validator.validateValue(.{.time = try typed.Time.parse("10:05:09")}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.time = try typed.Time.parse("10:05:09", .rfc3339)}, &context));
 		try t.expectInvalid(.{.code = codes.TIME_MIN, .data = .{.min = "10:05:10"}}, context);
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Time.parse("10:05:10");
+		const d = try typed.Time.parse("10:05:10", .rfc3339);
 		try t.expectEqual(typed.Value{.time = d}, try validator.validateValue(.{.time = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Time.parse("10:05:11");
+		const d = try typed.Time.parse("10:05:11", .rfc3339);
 		try t.expectEqual(typed.Value{.time = d}, try validator.validateValue(.{.time = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -250,23 +250,23 @@ test "time: max" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.time(.{.max = try typed.Time.parse("10:05:10")});
+	const validator = builder.time(.{.max = try typed.Time.parse("10:05:10", .rfc3339)});
 
 	{
-		try t.expectEqual(nullValue, try validator.validateValue(.{.time = try typed.Time.parse("10:05:11")}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.time = try typed.Time.parse("10:05:11", .rfc3339)}, &context));
 		try t.expectInvalid(.{.code = codes.TIME_MAX, .data = .{.max = "10:05:10"}}, context);
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Time.parse("10:05:10");
+		const d = try typed.Time.parse("10:05:10", .rfc3339);
 		try t.expectEqual(typed.Value{.time = d}, try validator.validateValue(.{.time = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Time.parse("10:05:09");
+		const d = try typed.Time.parse("10:05:09", .rfc3339);
 		try t.expectEqual(typed.Value{.time = d}, try validator.validateValue(.{.time = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
@@ -280,11 +280,11 @@ test "time: parse" {
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.time(.{.max = try typed.Time.parse("10:05:10"), .parse = true});
+	const validator = builder.time(.{.max = try typed.Time.parse("10:05:10", .rfc3339), .parse = true});
 
 	{
 		// still works fine with correct type
-		try t.expectEqual(nullValue, try validator.validateValue(.{.time = try typed.Time.parse("10:05:11")}, &context));
+		try t.expectEqual(nullValue, try validator.validateValue(.{.time = try typed.Time.parse("10:05:11", .rfc3339)}, &context));
 		try t.expectInvalid(.{.code = codes.TIME_MAX, .data = .{.max = "10:05:10"}}, context);
 	}
 
@@ -298,7 +298,7 @@ test "time: parse" {
 	{
 		// parses a string and returns the typed value
 		t.reset(&context);
-		try t.expectEqual(try typed.Time.parse("10:05:10"), (try validator.validateValue(.{.string = "10:05:10"}, &context)).time);
+		try t.expectEqual(try typed.Time.parse("10:05:10", .rfc3339), (try validator.validateValue(.{.string = "10:05:10"}, &context)).time);
 		try t.expectEqual(true, context.isValid());
 	}
 }

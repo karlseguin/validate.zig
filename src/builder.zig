@@ -17,6 +17,7 @@ const Array = v.Array;
 const String = v.String;
 const Field = object.Field;
 const Object = object.Object;
+const DateTime = v.DateTime;
 const Validator = v.Validator;
 const FieldValidator = object.FieldValidator;
 
@@ -115,6 +116,15 @@ pub fn Builder(comptime S: type) type {
 		}
 		pub fn time(self: Self, config: Time(S).Config) *Time(S) {
 			return self.tryTime(config) catch unreachable;
+		}
+
+		pub fn tryDateTime(self: Self, config: DateTime(S).Config) !*DateTime(S) {
+			const val = try self.allocator.create(DateTime(S));
+			val.* = try DateTime(S).init(self.allocator, config);
+			return val;
+		}
+		pub fn dateTime(self: Self, config: DateTime(S).Config) *DateTime(S) {
+			return self.tryDateTime(config) catch unreachable;
 		}
 
 		pub fn tryArray(self: Self, validator: anytype, config: Array(S).Config) !*Array(S) {

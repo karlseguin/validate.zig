@@ -29,3 +29,6 @@ pub const STRING_BASE64_URL_SAFE_NO_PADDING = 28;
 pub const OBJECT_LEN_MIN = 29;
 pub const OBJECT_LEN_MAX = 30;
 pub const STRING_LEN = 31;
+pub const TYPE_DATETIME = 32;
+pub const DATETIME_MIN = 33;
+pub const DATETIME_MAX = 34;

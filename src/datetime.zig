@@ -11,37 +11,37 @@ const DataBuilder = v.DataBuilder;
 const Allocator = std.mem.Allocator;
 
 const INVALID_TYPE = v.Invalid{
-	.code = codes.TYPE_DATE,
-	.err = "must be a date",
+	.code = codes.TYPE_DATETIME,
+	.err = "must be a datetime",
 };
 
-pub fn Date(comptime S: type) type {
+pub fn DateTime(comptime S: type) type {
 	return struct {
 		required: bool,
-		min: ?typed.Date,
-		max: ?typed.Date,
+		min: ?typed.DateTime,
+		max: ?typed.DateTime,
 		parse: bool,
-		default: ?typed.Date,
+		default: ?typed.DateTime,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
-		function: ?*const fn(value: ?typed.Date, context: *Context(S)) anyerror!?typed.Date,
+		function: ?*const fn(value: ?typed.DateTime, context: *Context(S)) anyerror!?typed.DateTime,
 
 		const Self = @This();
 
 		pub const Config = struct {
-			min: ?typed.Date = null,
-			max: ?typed.Date = null,
+			min: ?typed.DateTime = null,
+			max: ?typed.DateTime = null,
 			parse: bool = false,
-			default: ?typed.Date = null,
+			default: ?typed.DateTime = null,
 			required: bool = false,
-			function: ?*const fn(value: ?typed.Date, context: *Context(S)) anyerror!?typed.Date = null,
+			function: ?*const fn(value: ?typed.DateTime, context: *Context(S)) anyerror!?typed.DateTime = null,
 		};
 
 		pub fn init(allocator: Allocator, config: Config) !Self {
 			var min_invalid: ?v.Invalid = null;
 			if (config.min) |m| {
 				min_invalid = v.Invalid{
-					.code = codes.DATE_MIN,
+					.code = codes.DATETIME_MIN,
 					.data = try DataBuilder.init(allocator).put("min", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "cannot be before {d}", .{m}),
 				};
@@ -50,7 +50,7 @@ pub fn Date(comptime S: type) type {
 			var max_invalid: ?v.Invalid = null;
 			if (config.max) |m| {
 				max_invalid = v.Invalid{
-					.code = codes.DATE_MAX,
+					.code = codes.DATETIME_MAX,
 					.data = try DataBuilder.init(allocator).put("max", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "cannot be after {d}", .{m}),
 				};
@@ -72,13 +72,13 @@ pub fn Date(comptime S: type) type {
 			return Validator(S).init(self);
 		}
 
-		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*Date(S) {
-			var clone = try builder.allocator.create(Date(S));
+		pub fn trySetRequired(self: *Self, req: bool, builder: *Builder(S)) !*DateTime(S) {
+			var clone = try builder.allocator.create(DateTime(S));
 			clone.* = self.*;
 			clone.required = req;
 			return clone;
 		}
-		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *Date(S) {
+		pub fn setRequired(self: *Self, req: bool, builder: *Builder(S)) *DateTime(S) {
 			return self.trySetRequired(req, builder) catch unreachable;
 		}
 
@@ -86,17 +86,17 @@ pub fn Date(comptime S: type) type {
 		pub fn nestField(_: *Self, _: Allocator, _: *v.Field) !void {}
 
 		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
-			var date_value: ?typed.Date = null;
+			var datetime_value: ?typed.DateTime = null;
 			if (input) |untyped_value| {
 				var valid = false;
 				switch (untyped_value) {
-					.date => |n| {
+					.datetime => |n| {
 						valid = true;
-						date_value = n;
+						datetime_value = n;
 					},
 					.string => |s| blk: {
 						if (self.parse) {
-							date_value = typed.Date.parse(s, .iso8601) catch break :blk;
+							datetime_value = typed.DateTime.parse(s, .rfc3339) catch break :blk;
 							valid = true;
 						}
 					},
@@ -109,24 +109,24 @@ pub fn Date(comptime S: type) type {
 				}
 			}
 
-			if (try self.validate(date_value, context)) |value| {
+			if (try self.validate(datetime_value, context)) |value| {
 				return typed.new(context.allocator, value);
 			}
 			return .{.null = {}};
 		}
 
-		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?typed.Date {
-			var date_value: ?typed.Date = null;
+		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?typed.DateTime {
+			var datetime_value: ?typed.DateTime = null;
 			if (input) |string_value| {
-				date_value = typed.Date.parse(string_value, .iso8601) catch {
+				datetime_value = typed.DateTime.parse(string_value, .rfc3339) catch {
 					try context.add(INVALID_TYPE);
 					return null;
 				};
 			}
-			return self.validate(date_value, context);
+			return self.validate(datetime_value, context);
 		}
 
-		pub fn validate(self: *const Self, optional_value: ?typed.Date, context: *Context(S)) !?typed.Date {
+		pub fn validate(self: *const Self, optional_value: ?typed.DateTime, context: *Context(S)) !?typed.DateTime {
 			const value = optional_value orelse {
 				if (self.required) {
 					try context.add(v.required);
@@ -152,7 +152,7 @@ pub fn Date(comptime S: type) type {
 			return self.executeFunction(value, context);
 		}
 
-		fn executeFunction(self: *const Self, value: ?typed.Date, context: *Context(S)) !?typed.Date {
+		fn executeFunction(self: *const Self, value: ?typed.DateTime, context: *Context(S)) !?typed.DateTime {
 			if (self.function) |f| {
 				return (try f(value, context)) orelse self.default;
 			}
@@ -163,17 +163,17 @@ pub fn Date(comptime S: type) type {
 
 const t = @import("t.zig");
 const nullValue = typed.Value{.null = {}};
-test "date: required" {
+test "datetime: required" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	var builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const default = try typed.Date.parse("2023-05-24", .iso8601);
-	const not_required = builder.date(.{.required = false, });
+	const default = try typed.DateTime.parse("2023-05-24T02:33:58Z", .rfc3339);
+	const not_required = builder.dateTime(.{.required = false, });
 	const required = not_required.setRequired(true, &builder);
-	const not_required_default = builder.date(.{.required = false, .default = default});
+	const not_required_default = builder.dateTime(.{.required = false, .default = default});
 
 	{
 		try t.expectEqual(nullValue, try required.validateValue(null, &context));
@@ -188,20 +188,20 @@ test "date: required" {
 
 	{
 		t.reset(&context);
-		try t.expectEqual(default, (try not_required_default.validateValue(null, &context)).date);
+		try t.expectEqual(default, (try not_required_default.validateValue(null, &context)).datetime);
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		// test required = false when configured directly (not via setRequired)
 		t.reset(&context);
-		const validator = builder.date(.{.required = false});
+		const validator = builder.dateTime(.{.required = false});
 		try t.expectEqual(nullValue, try validator.validateValue(null, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
 
-test "date: type" {
+test "datetime: type" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
@@ -213,90 +213,89 @@ test "date: type" {
 	try t.expectInvalid(.{.code = codes.TYPE_DATE}, context);
 }
 
-test "date: min" {
+test "datetime: min" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.date(.{.min = try typed.Date.parse("2023-06-20", .iso8601)});
+	const validator = builder.dateTime(.{.min = try typed.DateTime.parse("2023-06-20T00:00:00Z", .rfc3339)});
 	{
-		try t.expectEqual(nullValue, try validator.validateValue(.{.date = try typed.Date.parse("2023-06-19", .iso8601)}, &context));
-		try t.expectInvalid(.{.code = codes.DATE_MIN, .data = .{.min = "2023-06-20"}}, context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.datetime = try typed.DateTime.parse("2023-06-19T00:00:00Z", .rfc3339)}, &context));
+		try t.expectInvalid(.{.code = codes.DATETIME_MIN, .data = .{.min = "2023-06-20T00:00:00Z"}}, context);
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Date.parse("2023-06-20", .iso8601);
-		try t.expectEqual(typed.Value{.date = d}, try validator.validateValue(.{.date = d}, &context));
+		const d = try typed.DateTime.parse("2023-06-20T00:00:00Z", .rfc3339);
+		try t.expectEqual(typed.Value{.datetime = d}, try validator.validateValue(.{.datetime = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Date.parse("2023-07-01", .iso8601);
-		try t.expectEqual(typed.Value{.date = d}, try validator.validateValue(.{.date = d}, &context));
+		const d = try typed.DateTime.parse("2023-07-01T00:00:00Z", .rfc3339);
+		try t.expectEqual(typed.Value{.datetime = d}, try validator.validateValue(.{.datetime = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
 
-test "date: max" {
+test "datetime: max" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.date(.{.max = try typed.Date.parse("2023-06-20", .iso8601)});
+	const validator = builder.dateTime(.{.max = try typed.DateTime.parse("2023-06-20T00:00:00Z", .rfc3339)});
 
 	{
-		try t.expectEqual(nullValue, try validator.validateValue(.{.date = try typed.Date.parse("2023-06-21", .iso8601)}, &context));
-		try t.expectInvalid(.{.code = codes.DATE_MAX, .data = .{.max = "2023-06-20"}}, context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.datetime = try typed.DateTime.parse("2023-06-21T00:00:00Z", .rfc3339)}, &context));
+		try t.expectInvalid(.{.code = codes.DATETIME_MAX, .data = .{.max = "2023-06-20T00:00:00Z"}}, context);
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Date.parse("2023-06-20", .iso8601);
-		try t.expectEqual(typed.Value{.date = d}, try validator.validateValue(.{.date = d}, &context));
+		const d = try typed.DateTime.parse("2023-06-20T00:00:00Z", .rfc3339);
+		try t.expectEqual(typed.Value{.datetime = d}, try validator.validateValue(.{.datetime = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 
 	{
 		t.reset(&context);
-		const d = try typed.Date.parse("2023-05-31", .iso8601);
-		try t.expectEqual(typed.Value{.date = d}, try validator.validateValue(.{.date = d}, &context));
+		const d = try typed.DateTime.parse("2023-05-31T00:00:00Z", .rfc3339);
+		try t.expectEqual(typed.Value{.datetime = d}, try validator.validateValue(.{.datetime = d}, &context));
 		try t.expectEqual(true, context.isValid());
 	}
 }
 
-
-test "date: parse" {
+test "datetime: parse" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.date(.{.max = try typed.Date.parse("2023-06-20", .iso8601), .parse = true});
+	const validator = builder.dateTime(.{.max = try typed.DateTime.parse("2023-06-20T10:00:00Z", .rfc3339), .parse = true});
 
 	{
 		// still works fine with correct type
-		try t.expectEqual(nullValue, try validator.validateValue(.{.date = try typed.Date.parse("2023-06-21", .iso8601)}, &context));
-		try t.expectInvalid(.{.code = codes.DATE_MAX, .data = .{.max = "2023-06-20"}}, context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.datetime = try typed.DateTime.parse("2023-06-21T00:00:00Z", .rfc3339)}, &context));
+		try t.expectInvalid(.{.code = codes.DATETIME_MAX, .data = .{.max = "2023-06-20T10:00:00Z"}}, context);
 	}
 
 	{
 		// parses a string and applies the validation on the parsed value
 		t.reset(&context);
-		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "2023-06-22"}, &context));
-		try t.expectInvalid(.{.code = codes.DATE_MAX, .data = .{.max = "2023-06-20"}}, context);
+		try t.expectEqual(nullValue, try validator.validateValue(.{.string = "2023-06-20T11:00:00Z"}, &context));
+		try t.expectInvalid(.{.code = codes.DATETIME_MAX, .data = .{.max = "2023-06-20T10:00:00Z"}}, context);
 	}
 
 	{
 		// parses a string and returns the typed value
 		t.reset(&context);
-		try t.expectEqual(try typed.Date.parse("2023-06-20", .iso8601), (try validator.validateValue(.{.string = "2023-06-20"}, &context)).date);
+		try t.expectEqual(try typed.DateTime.parse("2023-06-20T00:00:00Z", .rfc3339), (try validator.validateValue(.{.string = "2023-06-20T00:00:00Z"}, &context)).datetime);
 		try t.expectEqual(true, context.isValid());
 	}
 }

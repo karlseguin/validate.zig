@@ -315,7 +315,7 @@ test "array: change value" {
 		const to = try objectValidator.validateJsonS("{\"items\": [1, 2, -5]}", &context);
 		try t.expectEqual(true, context.isValid());
 
-		const items = to.mustGet(typed.Array, "items").items;
+		const items = to.get("items").?.array.items;
 		try t.expectEqual(@as(i64, -1), items[0].i64);
 		try t.expectEqual(@as(i64, 2), items[1].i64);
 		try t.expectEqual(@as(i64, -5), items[2].i64);
@@ -338,7 +338,7 @@ test "array: function" {
 		const to = try objectValidator.validateJsonS("{\"items\": [2]}", &context);
 		try t.expectEqual(true, context.isValid());
 
-		const items = to.get(typed.Array, "items").?.items;
+		const items = to.get("items").?.array.items;
 		try t.expectEqual(@as(i64, 9001), items[0].i64);
 	}
 
@@ -346,7 +346,7 @@ test "array: function" {
 		const to = try objectValidator.validateJsonS("{\"items\": [2, 3]}", &context);
 		try t.expectEqual(true, context.isValid());
 
-		const items = to.get(typed.Array, "items").?.items;
+		const items = to.get("items").?.array.items;
 		try t.expectEqual(@as(i64, 2), items[0].i64);
 		try t.expectEqual(@as(i64, 3), items[1].i64);
 	}

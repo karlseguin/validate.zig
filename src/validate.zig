@@ -19,6 +19,7 @@ pub const Float = @import("float.zig").Float;
 pub const Array = @import("array.zig").Array;
 pub const String = @import("string.zig").String;
 pub const Object = @import("object.zig").Object;
+pub const DateTime = @import("datetime.zig").DateTime;
 pub const codes = @import("codes.zig");
 pub const testing = @import("testing.zig");
 
