@@ -20,7 +20,7 @@ pub fn DateTime(comptime S: type) type {
 		required: bool,
 		min: ?typed.DateTime,
 		max: ?typed.DateTime,
-		parse: bool,
+		parse: ParseMode,
 		default: ?typed.DateTime,
 		min_invalid: ?v.Invalid,
 		max_invalid: ?v.Invalid,
@@ -28,10 +28,18 @@ pub fn DateTime(comptime S: type) type {
 
 		const Self = @This();
 
+		pub const ParseMode = packed struct(u32) {
+			rfc3339: bool = false,
+			timestamp_s: bool = false,
+			timestamp_ms: bool = false,
+			_padding: u29 = 0,
+		};
+
+
 		pub const Config = struct {
 			min: ?typed.DateTime = null,
 			max: ?typed.DateTime = null,
-			parse: bool = false,
+			parse: ParseMode = .{},
 			default: ?typed.DateTime = null,
 			required: bool = false,
 			function: ?*const fn(value: ?typed.DateTime, context: *Context(S)) anyerror!?typed.DateTime = null,
@@ -54,6 +62,10 @@ pub fn DateTime(comptime S: type) type {
 					.data = try DataBuilder.init(allocator).put("max", m).done(),
 					.err = try std.fmt.allocPrint(allocator, "cannot be after {d}", .{m}),
 				};
+			}
+
+			if (config.parse.timestamp_s and config.parse.timestamp_ms) {
+				return error.ConflictingPareConfig;
 			}
 
 			return .{
@@ -95,8 +107,17 @@ pub fn DateTime(comptime S: type) type {
 						datetime_value = n;
 					},
 					.string => |s| blk: {
-						if (self.parse) {
+						if (self.parse.rfc3339) {
 							datetime_value = typed.DateTime.parse(s, .rfc3339) catch break :blk;
+							valid = true;
+						}
+					},
+					.i64, .u32 => |n| blk: {
+						if (self.parse.timestamp_s) {
+							datetime_value = typed.DateTime.fromUnix(n, .seconds) catch break :blk;
+							valid = true;
+						} else if (self.parse.timestamp_ms) {
+							datetime_value = typed.DateTime.fromUnix(n, .milliseconds) catch break :blk;
 							valid = true;
 						}
 					},
@@ -118,10 +139,25 @@ pub fn DateTime(comptime S: type) type {
 		pub fn validateString(self: *const Self, input: ?[]const u8, context: *Context(S)) !?typed.DateTime {
 			var datetime_value: ?typed.DateTime = null;
 			if (input) |string_value| {
-				datetime_value = typed.DateTime.parse(string_value, .rfc3339) catch {
+				var valid = false;
+				if (self.parse.rfc3339) blk: {
+					datetime_value = typed.DateTime.parse(string_value, .rfc3339) catch break :blk;
+					valid = true;
+				}
+				if (valid == false) {
+					if (self.parse.timestamp_s) blk: {
+						datetime_value = typed.DateTime.fromUnix(string_value, .seconds) catch break :blk;
+						valid = true;
+					} else if (self.parse.timestamp_ms) blk: {
+						datetime_value = typed.DateTime.fromUnix(string_value, .milliseconds) catch break :blk;
+						valid = true;
+					}
+				}
+
+				if (valid == false) {
 					try context.add(INVALID_TYPE);
 					return null;
-				};
+				}
 			}
 			return self.validate(datetime_value, context);
 		}
@@ -270,14 +306,14 @@ test "datetime: max" {
 	}
 }
 
-test "datetime: parse" {
+test "datetime: parse rfc3339" {
 	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
 	defer context.deinit(t.allocator);
 
 	const builder = try Builder(void).init(t.allocator);
 	defer builder.deinit(t.allocator);
 
-	const validator = builder.dateTime(.{.max = try typed.DateTime.parse("2023-06-20T10:00:00Z", .rfc3339), .parse = true});
+	const validator = builder.dateTime(.{.max = try typed.DateTime.parse("2023-06-20T10:00:00Z", .rfc3339), .parse = .{.rfc3339 = true}});
 
 	{
 		// still works fine with correct type
@@ -296,6 +332,40 @@ test "datetime: parse" {
 		// parses a string and returns the typed value
 		t.reset(&context);
 		try t.expectEqual(try typed.DateTime.parse("2023-06-20T00:00:00Z", .rfc3339), (try validator.validateValue(.{.string = "2023-06-20T00:00:00Z"}, &context)).datetime);
+		try t.expectEqual(true, context.isValid());
+	}
+}
+
+test "datetime: parse timestamp_s" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.dateTime(.{.parse = .{.timestamp_s = true}});
+
+	{
+		// parses a string and returns the typed value
+		t.reset(&context);
+		try t.expectEqual(try typed.DateTime.parse("2024-03-06T08:23:50Z", .rfc3339), (try validator.validateValue(.{.i64 = 1709713430}, &context)).datetime);
+		try t.expectEqual(true, context.isValid());
+	}
+}
+
+test "datetime: parse timestamp_ms" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	const builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const validator = builder.dateTime(.{.parse = .{.timestamp_ms = true}});
+
+	{
+		// parses a string and returns the typed value
+		t.reset(&context);
+		try t.expectEqual(try typed.DateTime.parse("2024-03-06T08:23:50.123Z", .rfc3339), (try validator.validateValue(.{.i64 = 1709713430123}, &context)).datetime);
 		try t.expectEqual(true, context.isValid());
 	}
 }
