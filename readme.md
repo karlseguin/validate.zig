@@ -54,20 +54,14 @@ var context = try validate.Context(void).init(allocator, .{.max_errors = 10, .ma
 defer context.deinit();
 
 const jsonData = "{\"year\": \"nope\", \"score\": 94.3, \"tags\": [\"scifi\"]}";
-switch (movieValidator.validateJsonS(jsonData, &context)) {
-    .ok => {},
-    .err => |err| return err,
-    .json => // TODO: json was not valid
-    .invalid => |invalid| {
-        var arr = std.ArrayList(u8).init(t.allocator);
-        defer arr.deinit();
-        try std.json.stringify(invalid.errors, .{.emit_null_optional_fields = false}, arr.writer());
-        std.debug.print("{s}", .{arr.items});
-        return;
-    }
+const input = try movieValidator.validateJsonS(body, &context);
+if (!validator.isValid()) {
+    try std.json.stringify(validator.errors(), .{.emit_null_optional_fields = false}, SOME_WRITER);
+    return;
 }
+```
 
-// On success, validateJsonS returns a thin wrapper around std.typed.Value
+// On success, validateJsonS returns a thin wrapper around `typed.Value`
 // which lets us get values:
 
 const title = movie.string("title").?
@@ -142,9 +136,9 @@ Some errors also have a `data` object. The inclusion and structure of the `data`
 Between the `code`, `data` and `field` fields, developers should be able to programmatically consume and customize the errors.
 
 ## Typed
-Validation of data happens by calling `validateJsonS` on an `object` validator. This function returns a `validate.Typed` instance which is a thin wrapper around `std.typed.Value`.
+Validation of data happens by calling `validateJsonS` on an `object` validator. This function returns a `typed.Value` instance which is a thin wrapper around `typed.Value` (see [typed.zig](https://github.com/karlseguin/typed.zig)).
 
-The goal of `validate.Typed` is to provide a user-friendly API to extract the input data safely.
+The goal of `typed.Value` is to provide a user-friendly API to extract the input data safely.
 
 The returned `Typed` object and its data are only valid as long as the `validate.Context` that was passed into `validateJson` is.
 
@@ -371,19 +365,7 @@ In rare cases (e.g. OOM) `builder.object` can panic. `builder.tryObject` functio
 
 One created, either `validateJsonS` or `validateJsonV` are used to kick-off validation. `validateJsonS` takes a `[]const u8`. `validateJsonV` takes an `?std.typed.Value`.
 
-These return a `validate.Result` which is a tagged union:
-
-```zig
-const input = switch (user_validator.validateJsonS("...", context)) {
-    .ok => |input| input,
-    .json => |err| // the json could not be parsed
-    .err => |err| // some internal validation error (e.g. allocation failure)
-    .invalud => |invalid| {
-        const error = invalid.errors;
-        // errors can be serialized to JSON
-    }
-}
-```
+These return a `typed.Value` (see [typed.zig](https://github.com/karlseguin/typed.zig) on sucess. On error, the context's `isValid()` will return false, and the errors can be fetched using `context.errors()`.
 
 ### Dynamic Required
 Oftentimes you'll need validators which only differ in their `required` configuration. For example, an HTTP API might require a `name` on create, but leave the name as `optional` on update.
