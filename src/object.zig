@@ -198,7 +198,7 @@ pub fn Object(comptime S: type) type {
 				context.field = f;
 				const name = f.name;
 
-				if (value.m.getEntry(name)) |entry| {
+				if (value.unmanaged.getEntry(name)) |entry| {
 					entry.value_ptr.* = try fv.validator.validateValue(entry.value_ptr.*, context);
 				} else {
 					switch (try fv.validator.validateValue(null, context)) {
