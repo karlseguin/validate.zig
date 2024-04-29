@@ -12,14 +12,15 @@ pub fn build(b: *std.Build) !void {
 	// const typed_module = b.addModule("typed", .{.root_source_file = .{.path = "../typed.zig/src/typed.zig"}});
 
 	_ = b.addModule("validate", .{
-		.root_source_file = .{.path = "src/validate.zig"},
+		.root_source_file = b.path("src/validate.zig"),
 		.imports = &.{ .{.name = "typed", .module = typed_module }},
 	});
 
 	const lib_test = b.addTest(.{
-		.root_source_file = .{.path = "src/validate.zig"},
+		.root_source_file = b.path("src/validate.zig"),
 		.target = target,
 		.optimize = optimize,
+		.test_runner = b.path("test_runner.zig"),
 	});
 
 	lib_test.root_module.addImport("typed", typed_module);

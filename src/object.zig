@@ -17,6 +17,11 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be an object",
 };
 
+const INVALID_JSON = v.Invalid{
+	.code = codes.INVALID_JSON,
+	.err = "is not a valid JSON string",
+};
+
 pub const Field = struct {
 	// This is the name of the field in the object. Used when we get the value
 	// out of the map
@@ -45,6 +50,7 @@ pub fn FieldValidator(comptime S: type) type {
 
 pub fn Object(comptime S: type) type {
 	return struct {
+		parse: bool,
 		required: bool,
 		min: ?usize,
 		max: ?usize,
@@ -56,6 +62,7 @@ pub fn Object(comptime S: type) type {
 		const Self = @This();
 
 		pub const Config = struct {
+			parse: bool = false,
 			required: bool = false,
 			min: ?usize = null,
 			max: ?usize = null,
@@ -88,6 +95,7 @@ pub fn Object(comptime S: type) type {
 				.fields = fields,
 				.min = config.min,
 				.max = config.max,
+				.parse = config.parse,
 				.required = config.required,
 				.invalid_min = invalid_min,
 				.invalid_max = invalid_max,
@@ -150,13 +158,33 @@ pub fn Object(comptime S: type) type {
 		pub fn validateValue(self: *const Self, optional_value: ?typed.Value, context: *Context(S)) !typed.Value {
 			var map_value: ?typed.Map = null;
 			if (optional_value) |untyped_value| {
-				map_value = switch (untyped_value) {
-					.map => |map| map,
-					else => {
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
-					}
-				};
+				var invalid: ?v.Invalid = null;
+
+				switch (untyped_value) {
+					.map => |map| map_value = map,
+					.string => |str| blk: {
+						if (self.parse) {
+							const json_value = std.json.parseFromSliceLeaky(std.json.Value, context.allocator, str, .{}) catch {
+								invalid = INVALID_JSON;
+								break :blk;
+							};
+							switch (try typed.fromJson(context.allocator, json_value)) {
+								.map => |map|  map_value = map,
+								else => {
+									invalid = INVALID_TYPE;
+								},
+							}
+						} else {
+							invalid = INVALID_TYPE;
+						}
+					},
+					else => invalid = INVALID_TYPE,
+				}
+
+				if (invalid) |inv| {
+					try context.add(inv);
+					return .{.null = {}};
+				}
 			}
 
 			if (try self.validate(map_value, context)) |value| {
@@ -435,6 +463,43 @@ test "object: change value" {
 		try t.expectEqual(true, context.isValid());
 		try t.expectString("abc", to.get("name").?.string);
 	}
+}
+
+test "object: parse" {
+	var context = try Context(void).init(t.allocator, .{.max_errors = 2, .max_nesting = 1}, {});
+	defer context.deinit(t.allocator);
+
+	var builder = try Builder(void).init(t.allocator);
+	defer builder.deinit(t.allocator);
+
+	const dataValidator = builder.object(&.{
+		builder.field("user", builder.object(&.{
+			builder.field("id", builder.string(.{.required = true})),
+			builder.field("age", builder.int(i64, .{.required = true})),
+		}, .{.parse = true}))
+	}, .{});
+
+	{
+		// invalid json
+		t.reset(&context);
+		var input = typed.Map.init(t.allocator);
+		defer input.deinit();
+		try input.put("user", "{invalid");
+
+		_ = try dataValidator.validate(input, &context);
+		try t.expectInvalid(.{.code = codes.INVALID_JSON, .field = "user"}, context);
+	}
+
+	{
+		t.reset(&context);
+		var input = typed.Map.init(t.allocator);
+		defer input.deinit();
+		try input.put("user", "{\"id\": \"id-x\", \"age\": 98}");
+
+		_ = try dataValidator.validate(input, &context);
+		try t.expectEqual(true, context.isValid());
+	}
+
 }
 
 fn testObjectChangeValue(value: ?[]const u8, ctx: *Context(void)) !?[]const u8 {

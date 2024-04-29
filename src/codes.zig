@@ -32,3 +32,4 @@ pub const STRING_LEN = 31;
 pub const TYPE_DATETIME = 32;
 pub const DATETIME_MIN = 33;
 pub const DATETIME_MAX = 34;
+pub const INVALID_JSON = 35;
