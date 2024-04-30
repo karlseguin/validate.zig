@@ -15,8 +15,14 @@ const INVALID_TYPE = v.Invalid{
 	.err = "must be an array",
 };
 
+const INVALID_JSON = v.Invalid{
+	.code = codes.INVALID_JSON,
+	.err = "is not a valid JSON string",
+};
+
 pub fn Array(comptime S: type) type {
 	return struct {
+		parse: bool,
 		required: bool,
 		min: ?usize,
 		max: ?usize,
@@ -28,6 +34,7 @@ pub fn Array(comptime S: type) type {
 		const Self = @This();
 
 		pub const Config = struct {
+			parse: bool = false,
 			required: bool = false,
 			min: ?usize = null,
 			max: ?usize = null,
@@ -63,6 +70,7 @@ pub fn Array(comptime S: type) type {
 			return .{
 				.min = config.min,
 				.max = config.max,
+				.parse = config.parse,
 				.required = config.required,
 				.invalid_min = invalid_min,
 				.invalid_max = invalid_max,
@@ -93,16 +101,36 @@ pub fn Array(comptime S: type) type {
 			}
 		}
 
-		pub fn validateValue(self: *const Self, input: ?typed.Value, context: *Context(S)) !typed.Value {
+		pub fn validateValue(self: *const Self, optional_value: ?typed.Value, context: *Context(S)) !typed.Value {
 			var array_value: ?typed.Array = null;
-			if (input) |untyped_value| {
-				array_value = switch (untyped_value) {
-					.array => |a| a,
-					else => {
-						try context.add(INVALID_TYPE);
-						return .{.null = {}};
-					}
-				};
+			if (optional_value) |untyped_value| {
+				var invalid: ?v.Invalid = null;
+
+				switch (untyped_value) {
+					.array => |a| array_value = a,
+					.string => |str| blk: {
+						if (self.parse) {
+							const json_value = std.json.parseFromSliceLeaky(std.json.Value, context.allocator, str, .{}) catch {
+								invalid = INVALID_JSON;
+								break :blk;
+							};
+							switch (try typed.fromJson(context.allocator, json_value)) {
+								.array => |a|  array_value = a,
+								else => {
+									invalid = INVALID_TYPE;
+								},
+							}
+						} else {
+							invalid = INVALID_TYPE;
+						}
+					},
+					else => invalid = INVALID_TYPE
+				}
+
+				if (invalid) |inv| {
+					try context.add(inv);
+					return .{.null = {}};
+				}
 			}
 
 			if (try self.validate(array_value, context)) |value| {
