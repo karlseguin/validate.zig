@@ -169,9 +169,18 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
 	for (indexes) |idx| {
 		target_len += intLength(idx);
 	}
+	var index_slots: usize = 0;
 	for (parts) |p| {
+		if (p.len == 0) {
+			index_slots += 1;
+		}
 		target_len += p.len + 1;
 	}
+
+	// This extra indexe stuff is only used in advanced cases where the caller
+	// is manually validating nested indexes.
+	const extra_indexes = if (indexes.len > index_slots) indexes[index_slots..] else &[_]usize{};
+	target_len += extra_indexes.len;
 
 	var buf = try allocator.alloc(u8, target_len - 1);
 
@@ -207,6 +216,13 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
 		}
 	}
 
+	// for any extra indexes we have
+	for (extra_indexes) |n| {
+		buf[pos] = '.';
+		pos += 1;
+		pos += std.fmt.formatIntBuf(buf[pos..], n, 10, .lower, .{});
+	}
+
 	return buf[0..pos];
 }
 
@@ -237,6 +253,14 @@ test "createArrayPath" {
 		const actual = try createArrayPath(t.allocator, &parts, &indexes);
 		defer t.allocator.free(actual);
 		try t.expectString("user.3.fav.232", actual);
+	}
+
+	{
+		var parts = [_][]const u8{"user", ""};
+		var indexes = [_]usize{3, 232};
+		const actual = try createArrayPath(t.allocator, &parts, &indexes);
+		defer t.allocator.free(actual);
+		try t.expectString("user.3.232", actual);
 	}
 }
 
