@@ -153,7 +153,7 @@ test "pool: threadsafety" {
 }
 
 fn testPool(p: *Pool(bool)) void {
-	var r = std.rand.DefaultPrng.init(0);
+	var r = std.Random.DefaultPrng.init(0);
 	const random = r.random();
 
 	for (0..5000) |_| {
