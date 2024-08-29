@@ -16,19 +16,17 @@ pub fn Validator(comptime S: type) type {
 			const Ptr = @TypeOf(ptr);
 			const ptr_info = @typeInfo(Ptr);
 
-			if (ptr_info != .Pointer) @compileError("ptr must be a pointer");
-			if (ptr_info.Pointer.size != .One) @compileError("ptr must be a single item pointer");
-
-			// const alignment = ptr_info.Pointer.alignment;
+			if (ptr_info != .pointer) @compileError("ptr must be a pointer");
+			if (ptr_info.pointer.size != .One) @compileError("ptr must be a single item pointer");
 
 			const gen = struct {
 				pub fn validateImpl(pointer: *anyopaque, value: ?typed.Value, context: *Context(S)) !typed.Value {
 					const self: Ptr = @ptrCast(@alignCast(pointer));
-					return @call(.always_inline, ptr_info.Pointer.child.validateValue, .{self, value, context});
+					return @call(.always_inline, ptr_info.pointer.child.validateValue, .{self, value, context});
 				}
 				pub fn nestFieldImpl(pointer: *anyopaque, allocator: Allocator, parent: *Field) !void {
 					const self: Ptr = @ptrCast(@alignCast(pointer));
-					return @call(.always_inline, ptr_info.Pointer.child.nestField, .{self, allocator, parent});
+					return @call(.always_inline, ptr_info.pointer.child.nestField, .{self, allocator, parent});
 				}
 			};
 

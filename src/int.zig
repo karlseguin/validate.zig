@@ -16,10 +16,10 @@ const INVALID_TYPE = v.Invalid{
 };
 
 pub fn Int(comptime T: type, comptime S: type) type {
-	if (@typeInfo(T) != .Int) {
+	if (@typeInfo(T) != .int) {
 		@compileError(@typeName(T) ++ " is not an integer");
 	}
-	if (@typeInfo(T).Int.bits > 128) {
+	if (@typeInfo(T).int.bits > 128) {
 		@compileError("int validator does not support integers wider than 128 bits");
 	}
 
@@ -162,7 +162,7 @@ pub fn Int(comptime T: type, comptime S: type) type {
 							// so I'll just handle T's <= 64 by trying to parse into i64.
 							// For larger T's (including u64),  we'll just have a generic
 							// "not an int" error.
-							const ti = @typeInfo(T).Int;
+							const ti = @typeInfo(T).int;
 							if (ti.bits <= 64) {
 
 								const n = std.fmt.parseInt(if (ti.signedness == .signed) i64 else u64, s, 10) catch {

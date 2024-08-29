@@ -167,7 +167,7 @@ pub fn Builder(comptime S: type) type {
 		pub fn field(_: Self, name: []const u8, validator: anytype) FieldValidator(S) {
 			const Ptr = @TypeOf(validator);
 			const ptr_info = @typeInfo(Ptr);
-			if (ptr_info != .Pointer) @compileError("Field validator must be a pointer");
+			if (ptr_info != .pointer) @compileError("Field validator must be a pointer");
 
 			return .{
 				.field = .{

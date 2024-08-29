@@ -16,10 +16,10 @@ const INVALID_TYPE = v.Invalid{
 };
 
 pub fn Float(comptime T: type, comptime S: type) type {
-	if (@typeInfo(T) != .Float) {
+	if (@typeInfo(T) != .float) {
 		@compileError(@typeName(T) ++ " is not a float");
 	}
-	if (@typeInfo(T).Float.bits > 64) {
+	if (@typeInfo(T).float.bits > 64) {
 		@compileError("float validator does not support floats wider than 64 bits");
 	}
 
