@@ -24,31 +24,31 @@ pub const codes = @import("codes.zig");
 pub const testing = @import("testing.zig");
 
 pub const Invalid = struct {
-	code: i64,
-	err: []const u8,
-	data: ?typed.Value = null,
+    code: i64,
+    err: []const u8,
+    data: ?typed.Value = null,
 };
 
 pub const InvalidField = struct {
-	field: ?[]const u8,
-	code: i64,
-	err: []const u8,
-	data: ?typed.Value = null,
+    field: ?[]const u8,
+    code: i64,
+    err: []const u8,
+    data: ?typed.Value = null,
 };
 
 pub const required = Invalid{
-	.code = codes.REQUIRED,
-	.err = "required",
+    .code = codes.REQUIRED,
+    .err = "required",
 };
 
 pub fn simpleField(name: []const u8) Field {
-	return .{
-		.path = name,
-		.name = name,
-		.parts = null,
-	};
+    return .{
+        .path = name,
+        .name = name,
+        .parts = null,
+    };
 }
 
 test {
-	std.testing.refAllDecls(@This());
+    std.testing.refAllDecls(@This());
 }
