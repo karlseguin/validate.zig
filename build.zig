@@ -4,16 +4,14 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const typed_module = b.dependency("typed", .{
+    const localize_module = b.dependency("localize", .{
         .target = target,
         .optimize = optimize,
-    }).module("typed");
-
-    // const typed_module = b.addModule("typed", .{.root_source_file = .{.path = "../typed.zig/src/typed.zig"}});
+    }).module("localize");
 
     _ = b.addModule("validate", .{
         .root_source_file = b.path("src/validate.zig"),
-        .imports = &.{.{ .name = "typed", .module = typed_module }},
+        .imports = &.{.{ .name = "localize", .module = localize_module }},
     });
 
     const lib_test = b.addTest(.{
@@ -22,8 +20,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .test_runner = b.path("test_runner.zig"),
     });
-
-    lib_test.root_module.addImport("typed", typed_module);
+    lib_test.root_module.addImport("localize", localize_module);
 
     const run_test = b.addRunArtifact(lib_test);
     run_test.has_side_effects = true;

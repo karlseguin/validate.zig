@@ -1,29 +1,55 @@
 const std = @import("std");
-const testing = @import("testing.zig");
+const validate = @import("validate.zig");
 
-const Builder = @import("builder.zig").Builder;
-const Context = @import("context.zig").Context;
-
-pub const expect = std.testing.expect;
 pub const allocator = std.testing.allocator;
-
 pub const expectEqual = std.testing.expectEqual;
 pub const expectError = std.testing.expectError;
 pub const expectString = std.testing.expectEqualStrings;
 
-pub fn reset(ctx: anytype) void {
-    var c = ctx;
-    c.field = null;
-    c._error_len = 0;
-    c._nesting_idx = null;
+pub fn assertErrors(v: anytype, expected: []const validate.Error) !void {
+    try expectEqual(expected.len, v.len);
+    for (expected, v._errors[0..v.len]) |e, a| {
+        try expectString(e.field, a.field);
+        try expectEqual(e.code, a.code);
+        try expectString(e.label, a.label);
+
+        const expected_data = try std.json.stringifyAlloc(allocator, e.data, .{});
+        defer allocator.free(expected_data);
+
+        const actual_data = try std.json.stringifyAlloc(allocator, a.data, .{});
+        defer allocator.free(actual_data);
+
+        try expectString(expected_data, actual_data);
+    }
 }
 
-pub const expectInvalid = testing.expectInvalid;
+const Allocator = std.mem.Allocator;
+const ArenaAllocator = std.heap.ArenaAllocator;
 
-pub fn context() Context(void) {
-    return Context(void).init(allocator, .{ .max_errors = 2, .max_nesting = 1 }, {}) catch unreachable;
+var _arena: ?ArenaAllocator = null;
+var pool: ?*validate.Validators(void) = null;
+
+pub fn reset() void {
+    if (pool) |p| {
+        p.deinit();
+        pool = null;
+    }
+    if (_arena) |a| {
+        a.deinit();
+        _arena = null;
+    }
 }
 
-pub fn builder() Builder(void) {
-    return Builder(void).init(allocator) catch unreachable;
+pub fn validator() *validate.Validator(void) {
+    if (pool == null) {
+        pool = validate.Validators(void).init(allocator, .{.count = 1}) catch unreachable;
+    }
+    return pool.?.acquire(.en) catch unreachable;
+}
+
+pub fn arena() Allocator {
+    if (_arena == null)  {
+        _arena = ArenaAllocator.init(allocator);
+    }
+    return _arena.?.allocator();
 }

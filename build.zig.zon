@@ -1,11 +1,10 @@
 .{
-	.name = "validate",
-	.paths = .{""},
-	.version = "0.0.0",
-	.dependencies = .{
-		.typed = .{
-			.url = "https://github.com/karlseguin/typed.zig/archive/f3764a0976199b9abb888f5553d0cc7b5c26b693.tar.gz",
-			.hash = "12209a204987b35a993371661307fea38a81b9f00aeb1824e0f53ca503226705b096"
-		}
-	},
+    .name = "validate",
+    .paths = .{""},
+    .version = "2.0.0",
+    .dependencies = .{
+        .localize = .{
+            .path = "../localize.zig/"
+        },
+    },
 }

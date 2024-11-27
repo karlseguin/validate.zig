@@ -1,61 +1,56 @@
 const std = @import("std");
-const typed = @import("typed");
-const v = @import("validate.zig");
+const localize = @import("localize");
 
-const allocator = std.testing.allocator;
+const t = std.testing;
+const allocator = t.allocator;
 
-pub fn expectInvalid(e: anytype, context: anytype) !void {
+pub fn expectInvalid(e: anytype, validator: anytype) !void {
     const T = @TypeOf(e);
-    const expected_err: ?[]const u8 = if (@hasField(T, "err")) e.err else null;
     const expected_code: ?i64 = if (@hasField(T, "code")) e.code else null;
     const expected_field: ?[]const u8 = if (@hasField(T, "field")) e.field else null;
-    var expected_data: ?[]const u8 = null;
-    if (@hasField(T, "data")) {
-        // we go through all of this so that both actual and expected are serialized
-        // as typed.Value (and thus, serialize the same, e.g. floats use the same
-        // formatting options)
-        const js = try std.json.stringifyAlloc(allocator, e.data, .{});
-        defer allocator.free(js);
-
-        var parser = try std.json.parseFromSlice(std.json.Value, allocator, js, .{});
-        defer parser.deinit();
-
-        const expected_typed = try typed.fromJson(allocator, parser.value);
-        defer expected_typed.deinit();
-
-        expected_data = try std.json.stringifyAlloc(allocator, expected_typed, .{});
-    }
-
-    defer {
-        if (expected_data) |ed| allocator.free(ed);
-    }
+    const expected_message: ?[]const u8 = if (@hasField(T, "message")) e.message else null;
 
     // We're going to loop through all the errors, looking for the expected one
-    const errors = context.errors();
-    for (errors) |invalid| {
-        if (expected_err) |er| {
-            if (!std.mem.eql(u8, er, invalid.err)) continue;
-        }
-
+    for (validator.errors()) |err| {
         if (expected_code) |ec| {
-            if (invalid.code != ec) continue;
+            if (err.code != ec) continue;
         }
 
         if (expected_field) |ef| {
-            if (invalid.field) |actual_field| {
-                if (!std.mem.eql(u8, ef, actual_field)) continue;
-            } else {
-                continue;
-            }
+            if (!std.mem.eql(u8, ef, err.field)) continue;
         }
 
-        if (expected_data) |ed| {
-            if (invalid.data) |actual_data| {
-                const actual_json = try std.json.stringifyAlloc(allocator, actual_data, .{});
-                defer allocator.free(actual_json);
-                if (!std.mem.eql(u8, ed, actual_json)) continue;
-            } else {
-                continue;
+        if (expected_message) |em| {
+            if (!std.mem.eql(u8, em, err.message)) continue;
+        }
+
+        if (@hasField(T, "data")) {
+            var expected_data = try localize.Data.initFromStruct(allocator, e.data);
+            defer expected_data.deinit(allocator);
+            var it = expected_data._inner.iterator();
+            while (it.next()) |kv| {
+                const actual = err.data.get(kv.key_ptr.*) orelse return error.MissingValidationData;
+                switch (kv.value_ptr.*) {
+                    .null => try t.expectEqualStrings("null", @tagName(actual)),
+                    .string => |ve| try t.expectEqualStrings(ve, actual.string),
+                    .bool => |ve| try t.expectEqual(ve, actual.bool),
+                    .i64 => |ve| {
+                        switch (actual) {
+                            .i64 => |va| try t.expectEqual(ve, va),
+                            .u64 => |va| try t.expectEqual(ve, @as(i64, @intCast(va))),
+                            else => return error.NonIntergerData,
+                        }
+                    },
+                    .u64 => |ve| {
+                        switch (actual) {
+                            .u64 => |va| try t.expectEqual(ve, va),
+                            .i64 => |va| try t.expectEqual(ve, @as(u64, @intCast(va))),
+                            else => return error.NonIntergerData,
+                        }
+                    },
+                    .f32 => |v| try t.expectEqual(v, actual.f32),
+                    .f64 => |v| try t.expectEqual(v, actual.f64),
+                }
             }
         }
 
@@ -64,8 +59,8 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
     var arr = std.ArrayList(u8).init(allocator);
     defer arr.deinit();
 
-    try std.json.stringify(errors, .{ .whitespace = .indent_1 }, arr.writer());
+    try std.json.stringify(validator, .{ .whitespace = .indent_1 }, arr.writer());
     std.debug.print("\nReceived these errors:\n {s}\n", .{arr.items});
 
-    return error.MissingExpectedInvalid;
+    return error.MissingValidation;
 }
