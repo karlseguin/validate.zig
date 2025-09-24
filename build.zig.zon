@@ -1,7 +1,8 @@
 .{
-	.name = "validate",
-	.paths = .{""},
-	.version = "0.0.0",
+    .name = .validate,
+    .fingerprint = 0x42123254fdd57fdf,
+    .paths = .{""},
+    .version = "0.0.0",
 	.dependencies = .{
 		.typed = .{
 			.url = "https://github.com/karlseguin/typed.zig/archive/59d7e8a5551926f510d52ce68ab83c5a5fae674e.tar.gz",

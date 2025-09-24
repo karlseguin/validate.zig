@@ -9,17 +9,15 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     }).module("typed");
 
-    // const typed_module = b.addModule("typed", .{.root_source_file = .{.path = "../typed.zig/src/typed.zig"}});
-
-    _ = b.addModule("validate", .{
+    const mod = b.addModule("validate", .{
         .root_source_file = b.path("src/validate.zig"),
+        .target = target,
+        .optimize = optimize,
         .imports = &.{.{ .name = "typed", .module = typed_module }},
     });
 
     const lib_test = b.addTest(.{
-        .root_source_file = b.path("src/validate.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = mod,
         .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
     });
 
