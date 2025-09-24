@@ -3,10 +3,5 @@
     .fingerprint = 0x42123254fdd57fdf,
     .paths = .{""},
     .version = "0.0.0",
-	.dependencies = .{
-		.typed = .{
-			.url = "https://github.com/karlseguin/typed.zig/archive/59d7e8a5551926f510d52ce68ab83c5a5fae674e.tar.gz",
-			.hash = "12202068cc8f41887373825095d906d35b6eb19b1486c4b98a77f8456e107b05cfee"
-		}
-	},
+    .dependencies = .{ .typed = .{ .url = "git+https://github.com/gjuchault/typed.zig?ref=chore/zig-0.15-support#dde37d58f0265f29d0e6c7573ea0d0e3ec7b0092", .hash = "typed-0.0.0-GrKlF--gAgAf5Val78zgmpI4zqwj3UwxmJCPPefD-d8d", } },
 }

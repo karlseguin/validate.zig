@@ -33,13 +33,13 @@ pub fn main() !void {
     var skip: usize = 0;
     var leak: usize = 0;
 
-    const printer = Printer.init();
-    printer.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
+    // Clear line
+    std.debug.print("\r\x1b[0K", .{});
 
     for (builtin.test_functions) |t| {
         if (isSetup(t)) {
             t.func() catch |err| {
-                printer.status(.fail, "\nsetup \"{s}\" failed: {}\n", .{ t.name, err });
+                std.debug.print("\n\x1b[31msetup \"{s}\" failed: {}\n\x1b[0m", .{ t.name, err });
                 return err;
             };
         }
@@ -81,7 +81,7 @@ pub fn main() !void {
 
         if (std.testing.allocator_instance.deinit() == .leak) {
             leak += 1;
-            printer.status(.fail, "\n{s}\n\"{s}\" - Memory Leak\n{s}\n", .{ BORDER, friendly_name, BORDER });
+            std.debug.print("\n\x1b[31m{s}\n\"{s}\" - Memory Leak\n{s}\n\x1b[0m", .{ BORDER, friendly_name, BORDER });
         }
 
         if (result) |_| {
@@ -94,7 +94,7 @@ pub fn main() !void {
             else => {
                 status = .fail;
                 fail += 1;
-                printer.status(.fail, "\n{s}\n\"{s}\" - {s}\n{s}\n", .{ BORDER, friendly_name, @errorName(err), BORDER });
+                std.debug.print("\n\x1b[31m{s}\n\"{s}\" - {s}\n{s}\n\x1b[0m", .{ BORDER, friendly_name, @errorName(err), BORDER });
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
                 }
@@ -106,62 +106,47 @@ pub fn main() !void {
 
         if (env.verbose) {
             const ms = @as(f64, @floatFromInt(ns_taken)) / 1_000_000.0;
-            printer.status(status, "{s} ({d:.2}ms)\n", .{ friendly_name, ms });
+            const color = switch (status) {
+                .pass => "\x1b[32m",
+                .fail => "\x1b[31m",
+                .skip => "\x1b[33m",
+                else => "",
+            };
+            std.debug.print("{s}{s} ({d:.2}ms)\n\x1b[0m", .{ color, friendly_name, ms });
         } else {
-            printer.status(status, ".", .{});
+            const color = switch (status) {
+                .pass => "\x1b[32m",
+                .fail => "\x1b[31m",
+                .skip => "\x1b[33m",
+                else => "",
+            };
+            std.debug.print("{s}.\x1b[0m", .{color});
         }
     }
 
     for (builtin.test_functions) |t| {
         if (isTeardown(t)) {
             t.func() catch |err| {
-                printer.status(.fail, "\nteardown \"{s}\" failed: {}\n", .{ t.name, err });
+                std.debug.print("\n\x1b[31mteardown \"{s}\" failed: {}\n\x1b[0m", .{ t.name, err });
                 return err;
             };
         }
     }
 
     const total_tests = pass + fail;
-    const status = if (fail == 0) Status.pass else Status.fail;
-    printer.status(status, "\n{d} of {d} test{s} passed\n", .{ pass, total_tests, if (total_tests != 1) "s" else "" });
+    const color = if (fail == 0) "\x1b[32m" else "\x1b[31m";
+    std.debug.print("\n{s}{d} of {d} test{s} passed\n\x1b[0m", .{ color, pass, total_tests, if (total_tests != 1) "s" else "" });
     if (skip > 0) {
-        printer.status(.skip, "{d} test{s} skipped\n", .{ skip, if (skip != 1) "s" else "" });
+        std.debug.print("\x1b[33m{d} test{s} skipped\n\x1b[0m", .{ skip, if (skip != 1) "s" else "" });
     }
     if (leak > 0) {
-        printer.status(.fail, "{d} test{s} leaked\n", .{ leak, if (leak != 1) "s" else "" });
+        std.debug.print("\x1b[31m{d} test{s} leaked\n\x1b[0m", .{ leak, if (leak != 1) "s" else "" });
     }
-    printer.fmt("\n", .{});
-    try slowest.display(printer);
-    printer.fmt("\n", .{});
+    std.debug.print("\n", .{});
+    try slowest.display();
+    std.debug.print("\n", .{});
     std.posix.exit(if (fail == 0) 0 else 1);
 }
-
-const Printer = struct {
-    out: std.fs.File.Writer,
-
-    fn init() Printer {
-        return .{
-            .out = std.io.getStdErr().writer(),
-        };
-    }
-
-    fn fmt(self: Printer, comptime format: []const u8, args: anytype) void {
-        std.fmt.format(self.out, format, args) catch unreachable;
-    }
-
-    fn status(self: Printer, s: Status, comptime format: []const u8, args: anytype) void {
-        const color = switch (s) {
-            .pass => "\x1b[32m",
-            .fail => "\x1b[31m",
-            .skip => "\x1b[33m",
-            else => "",
-        };
-        const out = self.out;
-        out.writeAll(color) catch @panic("writeAll failed?!");
-        std.fmt.format(out, format, args) catch @panic("std.fmt.format failed?!");
-        self.fmt("\x1b[0m", .{});
-    }
-};
 
 const Status = enum {
     pass,
@@ -229,13 +214,13 @@ const SlowTracker = struct {
         return ns;
     }
 
-    fn display(self: *SlowTracker, printer: Printer) !void {
+    fn display(self: *SlowTracker) !void {
         var slowest = self.slowest;
         const count = slowest.count();
-        printer.fmt("Slowest {d} test{s}: \n", .{ count, if (count != 1) "s" else "" });
+        std.debug.print("Slowest {d} test{s}: \n", .{ count, if (count != 1) "s" else "" });
         while (slowest.removeMinOrNull()) |info| {
             const ms = @as(f64, @floatFromInt(info.ns)) / 1_000_000.0;
-            printer.fmt("  {d:.2}ms\t{s}\n", .{ ms, info.name });
+            std.debug.print("  {d:.2}ms\t{s}\n", .{ ms, info.name });
         }
     }
 

@@ -164,7 +164,7 @@ fn testPool(p: *Pool(bool)) void {
         var c = p.acquire(true) catch unreachable;
         std.debug.assert(c.state == true);
         c.state = false;
-        std.time.sleep(random.uintAtMost(u32, 100000));
+        std.Thread.sleep(random.uintAtMost(u32, 100000));
         std.debug.assert(c.state == false);
         p.release(c);
     }

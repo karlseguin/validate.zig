@@ -14,7 +14,7 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
         // we go through all of this so that both actual and expected are serialized
         // as typed.Value (and thus, serialize the same, e.g. floats use the same
         // formatting options)
-        const js = try std.json.stringifyAlloc(allocator, e.data, .{});
+        const js = try std.json.Stringify.valueAlloc(allocator, e.data, .{});
         defer allocator.free(js);
 
         var parser = try std.json.parseFromSlice(std.json.Value, allocator, js, .{});
@@ -23,7 +23,7 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
         const expected_typed = try typed.fromJson(allocator, parser.value);
         defer expected_typed.deinit();
 
-        expected_data = try std.json.stringifyAlloc(allocator, expected_typed, .{});
+        expected_data = try std.json.Stringify.valueAlloc(allocator, expected_typed, .{});
     }
 
     defer {
@@ -51,7 +51,7 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
 
         if (expected_data) |ed| {
             if (invalid.data) |actual_data| {
-                const actual_json = try std.json.stringifyAlloc(allocator, actual_data, .{});
+                const actual_json = try std.json.Stringify.valueAlloc(allocator, actual_data, .{});
                 defer allocator.free(actual_json);
                 if (!std.mem.eql(u8, ed, actual_json)) continue;
             } else {
@@ -61,10 +61,12 @@ pub fn expectInvalid(e: anytype, context: anytype) !void {
 
         return;
     }
-    var arr = std.ArrayList(u8).init(allocator);
-    defer arr.deinit();
+    var arr = std.ArrayList(u8){};
+    defer arr.deinit(allocator);
 
-    try std.json.stringify(errors, .{ .whitespace = .indent_1 }, arr.writer());
+    const json_str = try std.json.Stringify.valueAlloc(allocator, errors, .{ .whitespace = .indent_1 });
+    defer allocator.free(json_str);
+    try arr.appendSlice(allocator, json_str);
     std.debug.print("\nReceived these errors:\n {s}\n", .{arr.items});
 
     return error.MissingExpectedInvalid;
