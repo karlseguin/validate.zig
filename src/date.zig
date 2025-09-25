@@ -43,7 +43,7 @@ pub fn Date(comptime S: type) type {
                 min_invalid = v.Invalid{
                     .code = codes.DATE_MIN,
                     .data = try DataBuilder.init(allocator).put("min", m).done(),
-                    .err = try std.fmt.allocPrint(allocator, "cannot be before {d}", .{m}),
+                    .err = try std.fmt.allocPrint(allocator, "cannot be before {any}", .{m}),
                 };
             }
 
@@ -52,7 +52,7 @@ pub fn Date(comptime S: type) type {
                 max_invalid = v.Invalid{
                     .code = codes.DATE_MAX,
                     .data = try DataBuilder.init(allocator).put("max", m).done(),
-                    .err = try std.fmt.allocPrint(allocator, "cannot be after {d}", .{m}),
+                    .err = try std.fmt.allocPrint(allocator, "cannot be after {any}", .{m}),
                 };
             }
 

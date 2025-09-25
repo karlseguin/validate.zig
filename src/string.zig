@@ -110,8 +110,8 @@ pub fn String(comptime S: type) type {
             var invalid_choices: ?v.Invalid = null;
             var owned_choices: ?[][]u8 = null;
             if (config.choices) |choices| {
-                var choice_data = typed.Array.init(allocator);
-                try choice_data.ensureTotalCapacity(choices.len);
+                var choice_data = typed.Array{};
+                try choice_data.ensureTotalCapacity(allocator, choices.len);
 
                 var owned = try allocator.alloc([]u8, choices.len);
                 for (choices, 0..) |choice, i| {

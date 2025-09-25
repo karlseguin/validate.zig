@@ -158,7 +158,7 @@ pub fn Context(comptime S: type) type {
         }
 
         pub fn dump(self: Self) !void {
-            const e = try std.json.stringifyAlloc(self.allocator, self.errors(), .{});
+            const e = try std.json.Stringify.valueAlloc(self.allocator, self.errors(), .{});
             std.debug.print("Validation errors: \n{s}", .{e});
         }
     };
@@ -193,7 +193,9 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
     // so we can safely prepend the .
     const first = parts[0];
     if (first.len == 0) {
-        pos += std.fmt.formatIntBuf(buf, indexes[index], 10, .lower, .{});
+        var stream = std.io.fixedBufferStream(buf[pos..]);
+        std.fmt.format(stream.writer(), "{d}", .{indexes[index]}) catch unreachable;
+        pos += stream.getWritten().len;
         index += 1;
     } else {
         @memcpy(buf[0..first.len], first);
@@ -205,7 +207,9 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
             if (index == indexes.len) break;
             buf[pos] = '.';
             pos += 1;
-            pos += std.fmt.formatIntBuf(buf[pos..], indexes[index], 10, .lower, .{});
+            var stream = std.io.fixedBufferStream(buf[pos..]);
+            std.fmt.format(stream.writer(), "{d}", .{indexes[index]}) catch unreachable;
+            pos += stream.getWritten().len;
             index += 1;
         } else {
             buf[pos] = '.';
@@ -220,7 +224,9 @@ fn createArrayPath(allocator: Allocator, parts: [][]const u8, indexes: []usize) 
     for (extra_indexes) |n| {
         buf[pos] = '.';
         pos += 1;
-        pos += std.fmt.formatIntBuf(buf[pos..], n, 10, .lower, .{});
+        var stream = std.io.fixedBufferStream(buf[pos..]);
+        std.fmt.format(stream.writer(), "{d}", .{n}) catch unreachable;
+        pos += stream.getWritten().len;
     }
 
     return buf[0..pos];
@@ -295,9 +301,11 @@ test "context: addInvalidField with generic data" {
             .put("d5", "9000").done(),
     });
 
-    var arr = std.ArrayList(u8).init(t.allocator);
+    var arr = std.array_list.Managed(u8).init(t.allocator);
     defer arr.deinit();
-    try std.json.stringify(ctx.errors(), .{ .emit_null_optional_fields = false }, arr.writer());
+    const json_str = try std.json.Stringify.valueAlloc(t.allocator, ctx.errors(), .{ .emit_null_optional_fields = false });
+    defer t.allocator.free(json_str);
+    try arr.appendSlice(json_str);
 
     var parser = try std.json.parseFromSlice(std.json.Value, t.allocator, arr.items, .{});
     defer parser.deinit();
