@@ -3,5 +3,8 @@
     .fingerprint = 0x42123254fdd57fdf,
     .paths = .{""},
     .version = "0.0.0",
-    .dependencies = .{ .typed = .{ .url = "git+https://github.com/gjuchault/typed.zig?ref=chore/zig-0.15-support#dde37d58f0265f29d0e6c7573ea0d0e3ec7b0092", .hash = "typed-0.0.0-GrKlF--gAgAf5Val78zgmpI4zqwj3UwxmJCPPefD-d8d", } },
+    .dependencies = .{ .typed = .{
+        .url = "git+https://github.com/karlseguin/typed.zig#341cb51a575e8a520a716fea78a52b0aa7181b36",
+        .hash = "typed-0.0.0-GrKlF--gAgAf5Val78zgmpI4zqwj3UwxmJCPPefD-d8d",
+    } },
 }
